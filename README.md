@@ -3,7 +3,7 @@
 街道の一里塚のように、走った分を積み上げて残りを見るための個人用ダッシュボード。
 Google スプレッドシートの「Running」タブ（HealthFit が書き込んでいる記録）を読んで、
 走行距離・ペース・負荷をまとめます。
-Next.js 15（App Router）だけで動きます。DB もチャートライブラリも使っていません。
+Next.js 16（App Router）だけで動きます。DB もチャートライブラリも使っていません。
 
 - 週の距離と目標の進捗
 - 直近52週のストリップ（棒の高さ = 距離、色 = 平均心拍）
@@ -50,11 +50,7 @@ npm run dev                  # http://localhost:3000
 
 ## 3. Vercel にデプロイ
 
-```bash
-git init && git add -A && git commit -m "run dashboard"
-# GitHub に push して、Vercel で Import
-```
-
+GitHub に push して Vercel で Import します。
 Vercel の Project → Settings → Environment Variables に上の変数を入れるだけです。
 ビルド設定は初期値のまま（Framework: Next.js）。
 
@@ -78,6 +74,19 @@ components/YearStrip.tsx 52週ストリップ（SVG）
 components/PaceScatter.tsx 距離×ペース（SVG）
 app/globals.css         見た目のすべて
 ```
+
+## ドキュメント
+
+| ファイル | 内容 |
+| --- | --- |
+| [docs/development-rules.md](docs/development-rules.md) | ブランチ・Issue・PR・リリースの運用 |
+| [docs/coding-rules.md](docs/coding-rules.md) | TypeScript / React / CSS の方針 |
+| [docs/specification.md](docs/specification.md) | データソース、集計ロジック、画面仕様 |
+| [docs/design.md](docs/design.md) | カラー、タイポグラフィ、レイアウト、グラフ |
+| [docs/roadmap.md](docs/roadmap.md) | 開発計画と検討中の項目 |
+| [docs/daily-metrics-setup.md](docs/daily-metrics-setup.md) | 日次のヘルスケア数値をシートに足す手順 |
+
+AI 支援ツール向けのエントリポイントは [CLAUDE.md](CLAUDE.md) です。
 
 ## 気をつけている点
 
