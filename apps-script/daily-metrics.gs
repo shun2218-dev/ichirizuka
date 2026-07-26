@@ -86,6 +86,7 @@ function bulkUpdate(metric, rows) {
 
   const sheet = getSheet();
   const width = COLUMNS.length;
+  const cutoff = today();
   const last = sheet.getLastRow();
   const values = last > 1 ? sheet.getRange(2, 1, last - 1, width).getValues() : [];
 
@@ -109,6 +110,15 @@ function bulkUpdate(metric, rows) {
     // 桁区切り入り（"9,412"）を壊さないよう、最初のカンマだけで切る
     const value = toNumberOrBlank(lines[i].slice(sep + 1));
     if (!date || value === "") {
+      skipped++;
+      continue;
+    }
+
+    // 当日と未来日は書かない。1 日が終わっていない歩数を書くと「途中までの合計」が
+    // その日の値として残り、翌日の送信までダッシュボードに嘘の日が出る。
+    // 送信側は数日ぶんをまとめて送ってくるので、当日を捨てても翌日の実行で埋まる。
+    // date は "yyyy/MM/dd" にそろえてあるので文字列比較で日付順に並ぶ。
+    if (date >= cutoff) {
       skipped++;
       continue;
     }
