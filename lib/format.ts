@@ -24,8 +24,13 @@ export function hours(sec: number): string {
   return h ? `${h}時間${m}分` : `${m}分`;
 }
 
-export function km(v: number, digits = 1): string {
+/** 桁を固定して 3 桁区切りにする。指標の値はすべてこれを通す */
+export function decimal(v: number, digits = 0): string {
   return v.toLocaleString("ja-JP", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+export function km(v: number, digits = 1): string {
+  return decimal(v, digits);
 }
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];

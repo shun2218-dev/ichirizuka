@@ -345,6 +345,57 @@ a {
   margin-top: 6px;
 }
 
+/* ── コンディション（日次の指標）─────────────── */
+
+.condition-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 1px;
+  margin: 0;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+
+.stat-sub {
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.condition .plot,
+.condition .table-wrap {
+  margin-top: 18px;
+}
+
+.condition .notice {
+  margin-top: 0;
+}
+
+.condition .notice p {
+  margin: 0 0 8px;
+}
+
+.condition .notice p:last-child {
+  margin-bottom: 0;
+}
+
+/* セクション内の注記なので、上の罫線は要らない */
+.condition .footnote {
+  border-top: 0;
+  padding-top: 8px;
+}
+
+/* 単位は大文字にすると意味が変わる（mL/kg/min） */
+.th-unit {
+  display: block;
+  font-size: 9.5px;
+  text-transform: none;
+  color: var(--faint);
+}
+
 /* ── 散布図 ─────────────────────────────────── */
 
 .plot {

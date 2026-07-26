@@ -8,6 +8,7 @@ Next.js 16（App Router）だけで動きます。DB もチャートライブラ
 - 週の距離と目標の進捗
 - 直近52週のストリップ（棒の高さ = 距離、色 = 平均心拍）
 - 直近7日 ÷ 直近28日の週平均（走行量を急に増やしていないかの目安）
+- コンディション（安静時心拍数・HRV・VO2max・体重・歩数）と走行量の並べ見
 - 距離とペースの散布図（直近180日）
 - 距離帯ごとのベスト / 月別 / 1本ずつの記録
 
@@ -45,8 +46,14 @@ npm run dev                  # http://localhost:3000
 | `SHEET_ID` | ○ | シート URL の `/d/` と `/edit` の間 |
 | `SHEET_GID` | ○ | Running タブの `#gid=` の数字 |
 | `SHEET_CSV_URL` | – | 指定するとこの URL を直接読む（上の2つは無視） |
+| `SHEET_DAILY_GID` | – | Daily タブの `#gid=` の数字。入れるとコンディションが出る |
+| `SHEET_DAILY_CSV_URL` | – | Daily タブの CSV URL を直接指定する |
 | `WEEKLY_TARGET_KM` | – | 週の目標距離。既定 30 |
 | `APP_TIMEZONE` | – | 既定 `Asia/Tokyo` |
+
+安静時心拍数・HRV・VO2max・体重・歩数は、iPhone のショートカットから同じシートの
+`Daily` タブに毎朝投げます。作り方は [docs/daily-metrics-setup.md](docs/daily-metrics-setup.md)。
+`SHEET_DAILY_GID` を入れなければコンディションのセクションは出ず、走りの記録だけが表示されます。
 
 ## 3. Vercel にデプロイ
 
@@ -68,10 +75,11 @@ Vercel の Project → Settings → Environment Variables に上の変数を入�
 app/page.tsx            画面の組み立て（サーバーコンポーネント）
 app/api/refresh/route.ts キャッシュ破棄
 lib/sheet.ts            CSV 取得とパース（時間の表記ゆれを吸収）
-lib/metrics.ts          週/月の集計、ベスト、負荷の計算
+lib/metrics.ts          週/月の集計、ベスト、負荷、日次指標の計算
 lib/format.ts           ペース・時間・色の整形
 components/YearStrip.tsx 52週ストリップ（SVG）
 components/PaceScatter.tsx 距離×ペース（SVG）
+components/ConditionChart.tsx 安静時心拍数×走行距離（SVG）
 app/globals.css         見た目のすべて
 ```
 

@@ -1,4 +1,4 @@
-import type { Run } from "./sheet";
+import type { Daily, DailyMetricKey, Run } from "./sheet";
 
 /** これより短い記録は誤タップ扱いで集計から外す（km） */
 export const NOISE_KM = 0.4;
@@ -169,3 +169,112 @@ export function buildOverview(allRuns: Run[], now: Date) {
 }
 
 export type Overview = ReturnType<typeof buildOverview>;
+
+/* ── 日次のコンディション ───────────────────── */
+
+/**
+ * 表示する指標と単位。桁数は「見て意味がある精度」で決める
+ * （体重の 0.1kg は意味があるが、歩数の 0.1 歩は意味がない）。
+ *
+ * avgDigits は平均と前週比に使う。安静時心拍の 0.5bpm の差は読みたいので
+ * 実測値より 1 桁細かくする。歩数だけは小数にしても意味がない。
+ */
+export const DAILY_METRICS: {
+  key: DailyMetricKey;
+  label: string;
+  unit: string;
+  digits: number;
+  avgDigits: number;
+}[] = [
+  { key: "restingHr", label: "安静時心拍数", unit: "bpm", digits: 0, avgDigits: 1 },
+  { key: "hrv", label: "HRV", unit: "ms", digits: 0, avgDigits: 1 },
+  { key: "vo2max", label: "VO2max", unit: "mL/kg/min", digits: 1, avgDigits: 1 },
+  { key: "weight", label: "体重", unit: "kg", digits: 1, avgDigits: 1 },
+  { key: "steps", label: "歩数", unit: "歩", digits: 0, avgDigits: 0 },
+  { key: "sleepHours", label: "睡眠", unit: "時間", digits: 1, avgDigits: 1 },
+];
+
+/** null を除いた平均。1 つも無ければ null */
+function mean(values: (number | null)[]): number | null {
+  const ns = values.filter((v): v is number => v !== null);
+  return ns.length ? sum(ns) / ns.length : null;
+}
+
+export type DailyMetricSummary = {
+  key: DailyMetricKey;
+  label: string;
+  unit: string;
+  digits: number;
+  avgDigits: number;
+  /** いちばん新しい記録。指標ごとに欠測日が違うので日付も持つ */
+  latest: { value: number; date: Date } | null;
+  last7: number | null;
+  prev7: number | null;
+  /** 直近7日 − 前の7日。どちらかが欠けていれば null */
+  delta: number | null;
+  /** 直近7日のうち記録があった日数 */
+  covered: number;
+};
+
+export type ConditionWeek = {
+  start: Date;
+  km: number;
+  restingHr: number | null;
+  hrv: number | null;
+};
+
+/** 日次の指標を、走行距離と同じ週の区切り（月曜起点）に寄せる */
+function conditionWeeks(days: Daily[], weeks: WeekBucket[]): ConditionWeek[] {
+  const byWeek = new Map<string, Daily[]>();
+  for (const d of days) {
+    const key = dayKey(startOfWeek(d.date));
+    const bucket = byWeek.get(key);
+    if (bucket) bucket.push(d);
+    else byWeek.set(key, [d]);
+  }
+
+  return weeks.map((w) => {
+    const bucket = byWeek.get(dayKey(w.start)) ?? [];
+    const avg = (key: DailyMetricKey) => {
+      const v = mean(bucket.map((d) => d[key]));
+      return v === null ? null : Math.round(v);
+    };
+    return { start: w.start, km: w.km, restingHr: avg("restingHr"), hrv: avg("hrv") };
+  });
+}
+
+export function buildCondition(allDays: Daily[], weeks: WeekBucket[], now: Date) {
+  const today = startOfDay(now);
+  const tomorrow = addDays(today, 1);
+  // 未来日の行（シートの打ち間違い）は平均を狂わせるだけなので落とす
+  const days = allDays.filter((d) => d.date < tomorrow);
+
+  const inRange = (from: Date, to: Date) => days.filter((d) => d.date >= from && d.date < to);
+  const last7 = inRange(addDays(tomorrow, -7), tomorrow);
+  const prev7 = inRange(addDays(tomorrow, -14), addDays(tomorrow, -7));
+
+  const metrics: DailyMetricSummary[] = DAILY_METRICS.map((m) => {
+    const recorded = days.filter((d) => d[m.key] !== null);
+    const newest = recorded[recorded.length - 1];
+    const a = mean(last7.map((d) => d[m.key]));
+    const b = mean(prev7.map((d) => d[m.key]));
+    return {
+      ...m,
+      latest: newest ? { value: newest[m.key] as number, date: newest.date } : null,
+      last7: a,
+      prev7: b,
+      delta: a !== null && b !== null ? a - b : null,
+      covered: last7.filter((d) => d[m.key] !== null).length,
+    };
+  });
+
+  return {
+    days,
+    metrics,
+    /** 値が 1 つも入っていない指標は、そもそも送られていないので表から外す */
+    available: metrics.filter((m) => m.latest !== null),
+    weeks: conditionWeeks(days, weeks),
+  };
+}
+
+export type Condition = ReturnType<typeof buildCondition>;
