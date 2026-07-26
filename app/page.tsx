@@ -1,23 +1,34 @@
+import ConditionChart from "@/components/ConditionChart";
 import PaceScatter from "@/components/PaceScatter";
 import RefreshButton from "@/components/RefreshButton";
 import YearStrip from "@/components/YearStrip";
 import {
   clock,
   dateWithWeekday,
+  decimal,
   effort,
   effortColor,
   hours,
   km,
   pace,
+  shortDate,
   signed,
   timeOfDay,
 } from "@/lib/format";
-import { addDays, buildOverview, startOfDay, wallClockNow } from "@/lib/metrics";
-import { fetchRuns, sheetCsvUrl } from "@/lib/sheet";
+import type { Condition, DailyMetricSummary } from "@/lib/metrics";
+import { addDays, buildCondition, buildOverview, startOfDay, wallClockNow } from "@/lib/metrics";
+import type { DailyResult } from "@/lib/sheet";
+import { dailyCsvUrl, fetchDaily, fetchRuns, sheetCsvUrl } from "@/lib/sheet";
 
 export const revalidate = 600;
 
+/** コンディションのグラフに出す週数。52 週だと 1 本ずつが細くて折れ線が読めない */
+const CONDITION_WEEKS = 26;
+
 export default async function Page() {
+  // fetchDaily は投げない契約なので、Running の失敗で早期 return しても未処理の拒否は出ない
+  const dailyPromise = fetchDaily();
+
   let data: Awaited<ReturnType<typeof fetchRuns>>;
   try {
     data = await fetchRuns();
@@ -27,6 +38,7 @@ export default async function Page() {
 
   const now = wallClockNow();
   const o = buildOverview(data.runs, now);
+  const daily = await dailyPromise;
 
   if (!o.runs.length) {
     return <Setup message="シートは読めましたが、ランニングの行が見つかりませんでした。SHEET_GID が「Running」タブのものか確認してください。" />;
@@ -38,6 +50,7 @@ export default async function Page() {
   const scatterFrom = addDays(startOfDay(now), -180);
   const scatterRuns = o.runs.filter((r) => r.start >= scatterFrom);
   const monthPeak = Math.max(...o.months.map((m) => m.km), 1);
+  const condition = daily.days.length ? buildCondition(daily.days, o.weeks, now) : null;
 
   return (
     <>
@@ -171,6 +184,8 @@ export default async function Page() {
         </div>
       </section>
 
+      <ConditionSection daily={daily} condition={condition} />
+
       <section className="section">
         <h2>距離とペースの関係</h2>
         <p className="section-note">直近180日の{scatterRuns.length}本。上にあるほど速い。</p>
@@ -267,8 +282,155 @@ export default async function Page() {
       <p className="footnote">
         {o.skipped > 0 && <>0.4km 未満の{o.skipped}本は誤操作とみなして集計から外しています。</>} データ元は
         Google スプレッドシート。10分ごと、または「シートを読み直す」で読み直します。
+        {!daily.configured && (
+          <>
+            {" "}
+            <code>SHEET_DAILY_GID</code> を設定すると、安静時心拍数・HRV・体重・VO2max・歩数も
+            同じシートの Daily タブから読み込みます。
+          </>
+        )}
       </p>
     </>
+  );
+}
+
+function ConditionSection({
+  daily,
+  condition,
+}: {
+  daily: DailyResult;
+  condition: Condition | null;
+}) {
+  if (!daily.configured) return null;
+
+  const missing = condition?.metrics.filter((m) => m.latest === null) ?? [];
+  const rows = condition ? [...condition.days].reverse() : [];
+
+  return (
+    <section className="section condition">
+      <h2>コンディション</h2>
+      <p className="section-note">
+        毎朝ショートカットが Daily タブに書き込んでいる数値。走行量と並べて見る。
+      </p>
+
+      {daily.error ? (
+        <div className="notice">
+          <p>Daily タブを読み込めませんでした（{daily.error}）。</p>
+          <p>
+            <code>{dailyCsvUrl()}</code>
+          </p>
+        </div>
+      ) : !condition ? (
+        <div className="notice">
+          <p>
+            Daily タブは読めましたが、記録が 1 件もありません。<code>SHEET_DAILY_GID</code> が
+            Daily タブのものか、ショートカットが動いているかを確認してください。手順は{" "}
+            <code>docs/daily-metrics-setup.md</code> にあります。
+          </p>
+        </div>
+      ) : (
+        <>
+          <dl className="condition-grid">
+            {condition.available.map((m) => (
+              <ConditionTile key={m.key} metric={m} />
+            ))}
+          </dl>
+
+          <div className="plot">
+            <ConditionChart weeks={condition.weeks.slice(-CONDITION_WEEKS)} />
+          </div>
+          <div className="legend">
+            <span>線 = 週平均の安静時心拍数（下ほど低い）</span>
+            <span>棒 = その週の走行距離</span>
+            <span>直近{CONDITION_WEEKS}週</span>
+          </div>
+
+          <div className="table-wrap">
+            <DailyTable days={rows.slice(0, 14)} metrics={condition.available} />
+            {rows.length > 14 && (
+              <details className="more">
+                <summary>残り{rows.length - 14}日を表示</summary>
+                <DailyTable days={rows.slice(14)} metrics={condition.available} />
+              </details>
+            )}
+          </div>
+
+          {missing.length > 0 && (
+            <p className="footnote">
+              シートに値が入っていない指標: {missing.map((m) => m.label).join(" / ")}
+              。ショートカットの辞書のキーを確認してください。
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function ConditionTile({ metric }: { metric: DailyMetricSummary }) {
+  if (!metric.latest) return null;
+
+  return (
+    <div className="stat">
+      <dt>{metric.label}</dt>
+      <dd>
+        {decimal(metric.latest.value, metric.digits)}
+        <small>{metric.unit}</small>
+        <p className="stat-sub">
+          {shortDate(metric.latest.date)} 時点
+          {metric.last7 !== null && (
+            <>
+              <br />
+              {/* 欠測が多い指標（VO2max など）は、平均が何日分かを添えないと誤読される */}
+              {metric.covered < 7 ? `7日中${metric.covered}日の平均` : "7日平均"}{" "}
+              {decimal(metric.last7, metric.avgDigits)}
+              {metric.delta !== null && <> （前週比 {signed(metric.delta, metric.avgDigits)}）</>}
+            </>
+          )}
+        </p>
+      </dd>
+    </div>
+  );
+}
+
+function DailyTable({
+  days,
+  metrics,
+}: {
+  days: import("@/lib/sheet").Daily[];
+  metrics: DailyMetricSummary[];
+}) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>日付</th>
+          {metrics.map((m) => (
+            <th key={m.key}>
+              {m.label}
+              <small className="th-unit">{m.unit}</small>
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {days.map((d) => (
+          <tr key={d.date.toISOString()}>
+            <td>
+              {d.date.getFullYear()}/{dateWithWeekday(d.date)}
+            </td>
+            {metrics.map((m) => {
+              const v = d[m.key];
+              return (
+                <td key={m.key} className="mono">
+                  {v === null ? "—" : decimal(v, m.digits)}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

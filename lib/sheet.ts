@@ -1,5 +1,5 @@
 /**
- * Google スプレッドシートの 1 タブを CSV として取り出して、扱いやすい形に直す。
+ * Google スプレッドシートの各タブを CSV として取り出して、扱いやすい形に直す。
  * サーバー側でしか呼ばないので CORS は関係ない。
  */
 
@@ -22,7 +22,32 @@ export type Run = {
   source: string;
 };
 
+/** Daily タブの 1 日分。指標は「その日は記録がない」ことがあるので全部 null を許す */
+export type Daily = {
+  /** その日の 00:00（壁時計そのまま） */
+  date: Date;
+  /** 安静時心拍数 bpm */
+  restingHr: number | null;
+  /** 心拍変動 ms */
+  hrv: number | null;
+  /** mL/kg/min */
+  vo2max: number | null;
+  /** kg */
+  weight: number | null;
+  steps: number | null;
+  /** 時間 */
+  sleepHours: number | null;
+};
+
+/** Daily の指標名（date 以外）。表示側の一覧はここから導く */
+export type DailyMetricKey = Exclude<keyof Daily, "date">;
+
 const SECONDS_IN_DAY = 86400;
+
+/** gviz なら「リンクを知っている全員が閲覧可」だけで読める（ウェブ公開は不要） */
+function gvizUrl(id: string, gid: string): string {
+  return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&gid=${gid}`;
+}
 
 export function sheetCsvUrl(): string {
   const direct = process.env.SHEET_CSV_URL;
@@ -35,8 +60,21 @@ export function sheetCsvUrl(): string {
       "SHEET_ID が設定されていません。.env.local に SHEET_ID と SHEET_GID を入れてください。",
     );
   }
-  // gviz なら「リンクを知っている全員が閲覧可」だけで読める（ウェブ公開は不要）
-  return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&gid=${gid}`;
+  return gvizUrl(id, gid);
+}
+
+/**
+ * Daily タブの CSV URL。設定がなければ null。
+ * Running と違って未設定を異常扱いしない（コンディションの表示は任意機能）。
+ */
+export function dailyCsvUrl(): string | null {
+  const direct = process.env.SHEET_DAILY_CSV_URL;
+  if (direct) return direct;
+
+  const id = process.env.SHEET_ID;
+  const gid = process.env.SHEET_DAILY_GID;
+  if (!id || !gid) return null;
+  return gvizUrl(id, gid);
 }
 
 /** ダブルクォート・改行入りセルに対応した最小限の CSV パーサ */
@@ -115,19 +153,42 @@ function parseNumber(raw: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** 空欄と 0 以下は「その日は測っていない」とみなす。体重 0kg や心拍 0bpm は存在しない */
+function parseOptionalNumber(raw: string): number | null {
+  const v = raw.trim();
+  if (!v) return null;
+  const n = Number(v.replace(/[^\d.\-]/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * 日付の桁の並びは gviz が返す表示形式（＝シートのロケール）任せなので、
+ * 年が先（2026/07/26）でも後ろ（07/26/2026）でも読めるようにしておく。
+ */
+function parseDateParts(dateRaw: string): [number, number, number] | null {
+  // セルに時刻が続くことがあるので、頭から 3 つの数字だけを見る
+  const m = dateRaw.trim().match(/(\d+)[/.\-](\d+)[/.\-](\d+)/);
+  if (!m) return null;
+
+  const [a, b, c] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (a > 31) return [a, b, c];
+  if (c > 31) return [c, a, b];
+  // 2 桁年は年・月・日の区別がつかないので読めない扱いにする
+  return null;
+}
+
+/** "2026/07/26" → その日の 00:00 */
+function parseDay(dateRaw: string): Date | null {
+  const p = parseDateParts(dateRaw);
+  return p ? new Date(p[0], p[1] - 1, p[2]) : null;
+}
+
 /** "2026/07/26" + "17:36" → Date。時刻が空でも落とさない。 */
 function parseStart(dateRaw: string, timeRaw: string): Date | null {
-  const d = dateRaw.trim().replace(/[.\-]/g, "/");
-  const m = d.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
-  if (!m) return null;
+  const p = parseDateParts(dateRaw);
+  if (!p) return null;
   const t = timeRaw.trim().match(/^(\d{1,2}):(\d{2})/);
-  return new Date(
-    Number(m[1]),
-    Number(m[2]) - 1,
-    Number(m[3]),
-    t ? Number(t[1]) : 0,
-    t ? Number(t[2]) : 0,
-  );
+  return new Date(p[0], p[1] - 1, p[2], t ? Number(t[1]) : 0, t ? Number(t[2]) : 0);
 }
 
 /** ヘッダー名は前後の空白・大文字小文字・全角スペースを無視して照合する */
@@ -204,10 +265,50 @@ export function rowsToRuns(rows: string[][]): Run[] {
   return runs;
 }
 
-export async function fetchRuns(): Promise<{ runs: Run[]; fetchedAt: Date }> {
-  const res = await fetch(sheetCsvUrl(), {
+export function rowsToDaily(rows: string[][]): Daily[] {
+  const headerIndex = rows.findIndex((r) => indexOfHeader(r, "date", "日付") >= 0);
+  if (headerIndex < 0) return [];
+  const header = rows[headerIndex];
+
+  const col = {
+    date: indexOfHeader(header, "date", "日付"),
+    restingHr: indexOfHeader(header, "resting hr", "resting heart rate", "安静時心拍数"),
+    hrv: indexOfHeader(header, "hrv", "心拍変動"),
+    vo2max: indexOfHeader(header, "vo2max", "vo2 max", "心肺機能"),
+    weight: indexOfHeader(header, "weight", "体重"),
+    steps: indexOfHeader(header, "steps", "歩数"),
+    sleepHours: indexOfHeader(header, "sleep hours", "sleep", "睡眠時間"),
+  };
+
+  const at = (row: string[], i: number) => (i >= 0 ? (row[i] ?? "") : "");
+
+  const days: Daily[] = [];
+  for (const row of rows.slice(headerIndex + 1)) {
+    const date = parseDay(at(row, col.date));
+    if (!date) continue;
+
+    const metrics: Record<DailyMetricKey, number | null> = {
+      restingHr: parseOptionalNumber(at(row, col.restingHr)),
+      hrv: parseOptionalNumber(at(row, col.hrv)),
+      vo2max: parseOptionalNumber(at(row, col.vo2max)),
+      weight: parseOptionalNumber(at(row, col.weight)),
+      steps: parseOptionalNumber(at(row, col.steps)),
+      sleepHours: parseOptionalNumber(at(row, col.sleepHours)),
+    };
+    // 日付だけの行（ショートカットが値を1つも送れなかった日）は持っていても使えない
+    if (Object.values(metrics).every((v) => v === null)) continue;
+
+    days.push({ date, ...metrics });
+  }
+
+  days.sort((a, b) => a.date.getTime() - b.date.getTime());
+  return days;
+}
+
+async function fetchCsv(url: string, tag: string): Promise<string[][]> {
+  const res = await fetch(url, {
     // Vercel 側のキャッシュ。ページの revalidate と合わせている。
-    next: { revalidate: 600, tags: ["runs"] },
+    next: { revalidate: 600, tags: [tag] },
     headers: { "user-agent": "ichirizuka" },
   });
   if (!res.ok) {
@@ -215,6 +316,37 @@ export async function fetchRuns(): Promise<{ runs: Run[]; fetchedAt: Date }> {
       `シートを読めませんでした (HTTP ${res.status})。共有設定が「リンクを知っている全員が閲覧可」になっているか確認してください。`,
     );
   }
-  const text = await res.text();
-  return { runs: rowsToRuns(parseCsv(text)), fetchedAt: new Date() };
+  return parseCsv(await res.text());
+}
+
+export async function fetchRuns(): Promise<{ runs: Run[]; fetchedAt: Date }> {
+  const rows = await fetchCsv(sheetCsvUrl(), "runs");
+  return { runs: rowsToRuns(rows), fetchedAt: new Date() };
+}
+
+export type DailyResult = {
+  /** Daily タブの設定があるか */
+  configured: boolean;
+  days: Daily[];
+  /** 読めなかった理由。ランニングの表示を止めないよう例外にはしない */
+  error: string | null;
+};
+
+/**
+ * Daily タブを読む。設定漏れや読み取り失敗でランニングのダッシュボードを
+ * 落としたくないので、投げずに結果へ入れて返す。
+ */
+export async function fetchDaily(): Promise<DailyResult> {
+  const url = dailyCsvUrl();
+  if (!url) return { configured: false, days: [], error: null };
+
+  try {
+    return { configured: true, days: rowsToDaily(await fetchCsv(url, "daily")), error: null };
+  } catch (err) {
+    return {
+      configured: true,
+      days: [],
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
