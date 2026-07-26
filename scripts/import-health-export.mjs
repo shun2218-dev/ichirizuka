@@ -12,13 +12,15 @@
  * 使い方:
  *   node scripts/import-health-export.mjs <export.xml>              # 集計して確認するだけ
  *   node scripts/import-health-export.mjs <export.xml> --out ./tmp  # CSV に書き出す
- *   ICHIRIZUKA_TOKEN=xxx node scripts/import-health-export.mjs <export.xml> --post <URL>
+ *   node scripts/import-health-export.mjs <export.xml> --post       # Daily タブへ送る
  *
- * --post には Apps Script のウェブアプリ URL（.../exec）を渡す。
- * トークンは引数に書くと履歴に残るので、環境変数 ICHIRIZUKA_TOKEN で渡す。
+ * 送信先とトークンは `.env.local` に置く（コマンドに書くとシェルの履歴に残るため）。
+ *
+ *   SHEET_WEBAPP_URL=https://script.google.com/macros/s/.../exec
+ *   SHEET_WEBAPP_TOKEN=Apps Script の TOKEN と同じ文字列
  */
 
-import { createReadStream, writeFileSync } from "node:fs";
+import { createReadStream, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 /** export.xml の type → Daily タブの列 */
@@ -33,16 +35,34 @@ const METRICS = {
 const LB_TO_KG = 0.45359237;
 
 function parseArgs(argv) {
-  const args = { file: null, out: null, post: null, from: null, batch: 2000 };
+  const args = { file: null, out: null, post: false, from: null, batch: 2000 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--out") args.out = argv[++i];
-    else if (a === "--post") args.post = argv[++i];
+    else if (a === "--post") args.post = true;
     else if (a === "--from") args.from = argv[++i];
     else if (a === "--batch") args.batch = Number(argv[++i]);
     else if (!args.file) args.file = a;
   }
   return args;
+}
+
+/** .env.local を読む。アプリと同じ置き場所にして、鍵をコマンドに書かせない */
+function readEnvLocal() {
+  const path = new URL("../.env.local", import.meta.url);
+  const env = {};
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    return env;
+  }
+  for (const line of text.split("\n")) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
+    if (!m) continue;
+    env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
+  }
+  return env;
 }
 
 /** `<Record ... key="value" ...>` から必要な属性だけ取り出す */
@@ -187,16 +207,23 @@ if (args.out) {
 }
 
 if (args.post) {
-  const token = process.env.ICHIRIZUKA_TOKEN;
-  if (!token) {
-    console.error("\nICHIRIZUKA_TOKEN が未設定です。Apps Script の TOKEN と同じ文字列を環境変数で渡してください。");
+  const env = { ...readEnvLocal(), ...process.env };
+  const url = env.SHEET_WEBAPP_URL;
+  const token = env.SHEET_WEBAPP_TOKEN;
+  if (!url || !token) {
+    console.error(
+      "\n.env.local に次の 2 行を足してください（Apps Script のデプロイ画面と TOKEN からコピー）:\n" +
+        "  SHEET_WEBAPP_URL=https://script.google.com/macros/s/.../exec\n" +
+        "  SHEET_WEBAPP_TOKEN=...",
+    );
     process.exit(1);
   }
+
   console.log("");
   for (const [key, rows] of Object.entries(metrics)) {
     if (!rows.length) continue;
     try {
-      const r = await post(args.post, token, key, rows, args.batch);
+      const r = await post(url, token, key, rows, args.batch);
       console.log(`${key.padEnd(11)} 追加 ${r.added} / 更新 ${r.updated} / スキップ ${r.skipped}`);
     } catch (err) {
       // 1 指標が失敗しても残りは送る。同じ日を送り直しても上書きなので、直して再実行できる

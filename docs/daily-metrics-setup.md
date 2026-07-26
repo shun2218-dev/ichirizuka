@@ -181,14 +181,23 @@ JSON として壊れず、スクリプト側が空欄として扱います。囲
    ```
 
    指標ごとに「何日分・いつからいつまで・最新値」が出ます。
-4. 問題なければ Daily タブへ送る
+4. 送信先を `.env.local` に 1 回だけ書く
 
-   ```bash
-   ICHIRIZUKA_TOKEN='Apps Script の TOKEN' node scripts/import-health-export.mjs \
-     ~/Downloads/apple_health_export/export.xml --post 'https://script.google.com/macros/s/.../exec'
+   ```
+   SHEET_WEBAPP_URL=https://script.google.com/macros/s/.../exec
+   SHEET_WEBAPP_TOKEN=Apps Script の TOKEN と同じ文字列
    ```
 
-トークンは引数に書くとシェルの履歴に残るので、環境変数で渡します。
+   URL は Apps Script の **デプロイ → デプロイを管理** からコピーできます。
+   コマンドに直接書くとシェルの履歴に残るので、gitignore 済みの `.env.local` に置きます。
+   アプリはこの 2 つを読みません。
+
+5. Daily タブへ送る
+
+   ```bash
+   node scripts/import-health-export.mjs ~/Downloads/apple_health_export/export.xml --post
+   ```
+
 `--out ./tmp` を付ければ送信せず CSV に書き出すだけにもできます。
 
 スクリプトが気をつけていること:
