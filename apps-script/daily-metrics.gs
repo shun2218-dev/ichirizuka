@@ -35,6 +35,11 @@ function doPost(e) {
       return reply({ ok: false, error: "トークンが一致しません" });
     }
 
+    // 過去分の一括取り込み。1 指標ぶんの「日付,値」を何行でも受ける
+    if (body.rows) {
+      return bulkUpdate(body.metric, body.rows);
+    }
+
     // date は省略できる。ショートカット側の「日付」「日付を書式設定」を作らずに済む
     const date = body.date ? normalizeDate(body.date) : today();
     if (!date) {
@@ -61,6 +66,82 @@ function doPost(e) {
   } catch (err) {
     return reply({ ok: false, error: String(err) });
   }
+}
+
+/**
+ * 過去分の取り込み。1 リクエストにつき 1 指標を、日付ぶんまとめて書く。
+ *
+ * metric: COLUMNS の key（"resting_hr" など）
+ * rows:   "2026/07/26,52;2026/07/25,53" のような区切りテキスト（改行か `;`）
+ *
+ * 5 指標ぶんを 1 行に揃えてから送るのはショートカット側で組みにくいので、
+ * 指標ごとに列を埋める形にしている。行の読み書きは 1 回にまとめる
+ * （1 行ずつ書くと数百日分でタイムアウトするため）。
+ */
+function bulkUpdate(metric, rows) {
+  const colIndex = indexOfColumn(metric);
+  if (colIndex < 0) {
+    return reply({ ok: false, error: "metric が不明です: " + metric });
+  }
+
+  const sheet = getSheet();
+  const width = COLUMNS.length;
+  const last = sheet.getLastRow();
+  const values = last > 1 ? sheet.getRange(2, 1, last - 1, width).getValues() : [];
+
+  const rowOfDate = {};
+  for (let i = 0; i < values.length; i++) {
+    const d = normalizeDate(values[i][0]);
+    if (d) rowOfDate[d] = i;
+  }
+
+  let updated = 0;
+  let added = 0;
+  let skipped = 0;
+
+  // JSON の文字列に生の改行は入れられないので、ショートカット側は `;` で繋いでくる
+  const lines = String(rows).split(/[\n;]/);
+  for (let i = 0; i < lines.length; i++) {
+    const sep = lines[i].indexOf(",");
+    if (sep < 0) continue;
+
+    const date = normalizeDate(lines[i].slice(0, sep));
+    // 桁区切り入り（"9,412"）を壊さないよう、最初のカンマだけで切る
+    const value = toNumberOrBlank(lines[i].slice(sep + 1));
+    if (!date || value === "") {
+      skipped++;
+      continue;
+    }
+
+    let at = rowOfDate[date];
+    if (at === undefined) {
+      const blank = [];
+      for (let c = 0; c < width; c++) blank.push("");
+      blank[0] = date;
+      blank[width - 1] = new Date();
+      values.push(blank);
+      at = values.length - 1;
+      rowOfDate[date] = at;
+      added++;
+    } else {
+      updated++;
+    }
+    values[at][colIndex] = value;
+  }
+
+  if (values.length) {
+    sheet.getRange(2, 1, values.length, width).setValues(values);
+    sortByDateDesc(sheet);
+  }
+
+  return reply({ ok: true, metric: metric, added: added, updated: updated, skipped: skipped });
+}
+
+function indexOfColumn(key) {
+  for (let i = 0; i < COLUMNS.length; i++) {
+    if (COLUMNS[i].key === key) return i;
+  }
+  return -1;
 }
 
 /** ブラウザで /exec を開いたときの動作確認用 */
@@ -93,10 +174,18 @@ function today() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd");
 }
 
-/** "2026/07/27" / "2026-07-27" / ISO 文字列 → "2026/07/27" */
+/**
+ * "2026/07/27" / "2026-07-27" / "2026年7月27日" / ISO 文字列 / Date → "2026/07/27"
+ *
+ * 日付セルは getValues() だと Date で返り、ショートカットの日付変数は
+ * 書式指定を忘れると "2026年7月27日" で飛んでくる。どちらも受ける。
+ */
 function normalizeDate(raw) {
   if (!raw) return null;
-  const m = String(raw).match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (raw instanceof Date) {
+    return Utilities.formatDate(raw, Session.getScriptTimeZone(), "yyyy/MM/dd");
+  }
+  const m = String(raw).match(/(\d{4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/);
   if (!m) return null;
   const pad = function (n) {
     return String(n).length < 2 ? "0" + n : String(n);
