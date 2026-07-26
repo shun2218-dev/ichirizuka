@@ -35,7 +35,8 @@ function doPost(e) {
       return reply({ ok: false, error: "トークンが一致しません" });
     }
 
-    const date = normalizeDate(body.date);
+    // date は省略できる。ショートカット側の「日付」「日付を書式設定」を作らずに済む
+    const date = body.date ? normalizeDate(body.date) : today();
     if (!date) {
       return reply({ ok: false, error: "date が読めません: " + body.date });
     }
@@ -82,6 +83,14 @@ function getSheet() {
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+/**
+ * date を省略して送ってきたとき用の「今日」。
+ * スプレッドシートに紐づくスクリプトなので、シートと同じタイムゾーンで解決される。
+ */
+function today() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd");
 }
 
 /** "2026/07/27" / "2026-07-27" / ISO 文字列 → "2026/07/27" */
