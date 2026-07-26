@@ -33,6 +33,13 @@ Google スプレッドシートを唯一のデータソースとする Next.js�
 - 閉じずに参照だけしたい場合は `Refs #N`
 - 閉じている Issue = **対応済み**（リリース済みとは限らない）。リリース PR では Issue のクローズを扱わない
 
+### リリース
+
+- `develop` → `main` の PR は **merge commit**（squash しない）。トピック PR だけ squash
+- `package.json` の `version` を上げてから `develop` に載せる。`main` へ直接 push しない
+- タグは `gh release create v0.2.0 --target main`。リリースノートは日本語で書く
+- 新しい環境変数が要る変更は、**未設定でも落ちない作り**にする
+
 ### コード
 
 - **依存を増やさない。** 標準機能で書けないか先に検討する
