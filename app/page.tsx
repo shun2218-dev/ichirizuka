@@ -358,7 +358,7 @@ function ConditionSection({
           {missing.length > 0 && (
             <p className="footnote">
               シートに値が入っていない指標: {missing.map((m) => m.label).join(" / ")}
-              。ショートカットの辞書のキーを確認してください。
+              。ショートカットが送っているキーを確認してください。
             </p>
           )}
         </>
