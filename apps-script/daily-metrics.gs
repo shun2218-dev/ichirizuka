@@ -37,7 +37,7 @@ function doPost(e) {
 
     // 過去分の一括取り込み。1 指標ぶんの「日付,値」を何行でも受ける
     if (body.rows) {
-      return bulkUpdate(body.metric, body.rows);
+      return bulkUpdate(body.metric, body.rows, body.from);
     }
 
     // date は省略できる。ショートカット側の「日付」「日付を書式設定」を作らずに済む
@@ -73,12 +73,19 @@ function doPost(e) {
  *
  * metric: COLUMNS の key（"resting_hr" など）
  * rows:   "2026/07/26,52;2026/07/25,53" のような区切りテキスト（改行か `;`）
+ * from:   これより前の日付を捨てる（省略可）
  *
  * 5 指標ぶんを 1 行に揃えてから送るのはショートカット側で組みにくいので、
  * 指標ごとに列を埋める形にしている。行の読み書きは 1 回にまとめる
  * （1 行ずつ書くと数百日分でタイムアウトするため）。
+ *
+ * from が要る理由。ショートカットの「開始日が次の過去の期間内 N 日」は実行時刻を
+ * 起点にした移動窓なので、範囲のいちばん古い日が途中で切れる。歩数のように 1 日を
+ * 合計する指標だと、その日に「途中までの合計」を書いて前に入っていた正しい値を壊す。
+ * 検索フィルタ側で日の境目に合わせられれば要らないが、あの欄には変数を差し込めない。
+ * そこで送信側は窓を 1 日広めに取り、実際に書きたい下限を from で渡す。
  */
-function bulkUpdate(metric, rows) {
+function bulkUpdate(metric, rows, from) {
   const colIndex = indexOfColumn(metric);
   if (colIndex < 0) {
     return reply({ ok: false, error: "metric が不明です: " + metric });
@@ -87,6 +94,7 @@ function bulkUpdate(metric, rows) {
   const sheet = getSheet();
   const width = COLUMNS.length;
   const cutoff = today();
+  const floor = from ? normalizeDate(from) : null;
   const last = sheet.getLastRow();
   const values = last > 1 ? sheet.getRange(2, 1, last - 1, width).getValues() : [];
 
@@ -118,7 +126,7 @@ function bulkUpdate(metric, rows) {
     // その日の値として残り、翌日の送信までダッシュボードに嘘の日が出る。
     // 送信側は数日ぶんをまとめて送ってくるので、当日を捨てても翌日の実行で埋まる。
     // date は "yyyy/MM/dd" にそろえてあるので文字列比較で日付順に並ぶ。
-    if (date >= cutoff) {
+    if (date >= cutoff || (floor && date < floor)) {
       skipped++;
       continue;
     }
