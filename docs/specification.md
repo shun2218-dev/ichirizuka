@@ -7,9 +7,11 @@
 ```
 HealthFit (iPhone) ─→ Running タブ ─┐
                                     │
-ショートカット/GAS ─→ Daily タブ  ──┼─→ (CSV) ─→ Next.js ─→ ダッシュボード
+ショートカット/GAS ─→ Daily タブ  ──┤
+                                    ├─→ (CSV) ─→ Next.js ─→ ダッシュボード
+HealthFit → Drive → FIT → Fit タブ ─┤
                                     │
-HealthFit → Drive → FIT → Fit タブ ─┘
+手で編集        ─→ Settings タブ ───┘
           （すべて同じ Google スプレッドシート）
 ```
 
@@ -96,6 +98,31 @@ Daily タブは `SHEET_DAILY_GID`（または `SHEET_DAILY_CSV_URL`）を設定�
 
 Fit タブは `SHEET_FIT_GID`（または `SHEET_FIT_CSV_URL`）を設定したときだけ読む。
 Daily と同じく**未設定・読み取り失敗・0 件のいずれでも例外にしない**。
+
+### Settings タブの列
+
+目標や練習の条件を、再デプロイなしで変えられるようにするためのタブ。手で編集する。
+作りかたは [settings-sheet.md](settings-sheet.md) を参照。
+
+1 列目が `key`、2 列目が `value`。**ヘッダー行は要らない**（既知のキーに一致した行だけ
+拾うので、あっても無視される）。3 列目以降は読まないのでメモに使える。
+
+| 内部名 | 受け付けるキー | 例 | 省略時 |
+| --- | --- | --- | --- |
+| goalMarathonSec | `goal_marathon_time` / `目標タイム` | `3:30:00` | 目標の表示を出さない |
+| raceDate | `race_date` / `レース日` | `2027/03/14` | **未定として扱う（正常）** |
+| trainingDays | `training_days` / `練習可能曜日` | `Tue,Thu,Sat,Sun` | 指定なし |
+| weeklyTargetKm | `weekly_target_km` / `週の目標距離` | `40` | 環境変数 → 30 |
+
+曜日は英語の略記・フル・日本語（`火・木・土・日`）を受ける。読めない語は落とす。
+
+**心拍ゾーンの境界と最大心拍はここに置かない。** FIT がランごとの実際の設定値を持ってくる
+ので、二重に持つと食い違うだけになる。
+
+週の目標距離の優先順位は **Settings → `WEEKLY_TARGET_KM` → 30km**。
+
+Settings タブは `SHEET_SETTINGS_GID`（または `SHEET_SETTINGS_CSV_URL`）を設定したときだけ
+読む。Daily / Fit と同じく**未設定・読み取り失敗・0 件のいずれでも例外にしない**。
 
 ### パースの方針
 
@@ -257,9 +284,11 @@ Daily タブの各指標について次を出す。指標ごとに欠測日が�
 
 1. **VDOT** と、根拠にしたラン（日付・距離・時間・ペース）
 2. **フルマラソンの予測** — 幅で出す。走り込み量が目安に届いていれば 1 つの値
-3. **等価タイム** — 5km / 10km / ハーフ / フル
-4. **練習ペース** — E / M / T / I / R と使いどころ
-5. **脚注** — 練習からの推定なので下限であること、外挿が楽観側に出る理由
+3. **目標との差** — Settings タブに `goal_marathon_time` があるときだけ。必要な VDOT、
+   今との差、レースまでの週数、走れる曜日
+4. **等価タイム** — 5km / 10km / ハーフ / フル
+5. **練習ペース** — E / M / T / I / R と使いどころ
+6. **脚注** — 練習からの推定なので下限であること、外挿が楽観側に出る理由
 
 ### 強度の配分のセクション
 
@@ -296,7 +325,7 @@ Running のシートが読めない場合、集計を行わず設定手順の案
 
 ### 更新
 
-ページは 600 秒キャッシュ。「シートを読み直す」を押すと `POST /api/refresh` が `runs` / `daily` / `fit` のタグを破棄する。シート側の反映ラグは解消しない。
+ページは 600 秒キャッシュ。「シートを読み直す」を押すと `POST /api/refresh` が `runs` / `daily` / `fit` / `settings` のタグを破棄する。シート側の反映ラグは解消しない。
 
 ## 環境変数
 
@@ -309,7 +338,9 @@ Running のシートが読めない場合、集計を行わず設定手順の案
 | `SHEET_DAILY_CSV_URL` | – | — | Daily タブの CSV URL を直接指定する |
 | `SHEET_FIT_GID` | – | — | Fit タブの `#gid=` の数字。FIT の取り込み結果を読む |
 | `SHEET_FIT_CSV_URL` | – | — | Fit タブの CSV URL を直接指定する |
-| `WEEKLY_TARGET_KM` | – | `30` | 週の目標距離 |
+| `SHEET_SETTINGS_GID` | – | — | Settings タブの `#gid=` の数字。目標やレース日を読む |
+| `SHEET_SETTINGS_CSV_URL` | – | — | Settings タブの CSV URL を直接指定する |
+| `WEEKLY_TARGET_KM` | – | `30` | 週の目標距離。Settings タブがあればそちらが優先 |
 | `APP_TIMEZONE` | – | `Asia/Tokyo` | 日付境界の判定に使う |
 
 `SHEET_ID` は閲覧可能なシートを指すため、実質的にアクセス権に相当する。`.env.example` には書かない。
@@ -318,3 +349,4 @@ Running のシートが読めない場合、集計を行わず設定手順の案
 
 - 日次のヘルスケア数値をシートに足す手順: [daily-metrics-setup.md](daily-metrics-setup.md)
 - FIT から心拍ゾーン滞在時間を取り込む手順: [fit-import-setup.md](fit-import-setup.md)
+- 目標タイム・レース日・練習可能曜日の設定: [settings-sheet.md](settings-sheet.md)

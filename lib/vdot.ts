@@ -155,6 +155,33 @@ export const MARATHON_WEEKLY_KM = 64;
 /** 30km 走をしていないうちは、後半の失速を予測に織り込めない */
 export const MARATHON_LONG_RUN_KM = 30;
 
+export type GoalGap = {
+  goalSec: number;
+  /** そのタイムで走るのに必要な VDOT */
+  goalVdot: number;
+  /** 必要 VDOT − 今の VDOT。プラスなら足りていない */
+  vdotGap: number;
+  /** 予測タイム − 目標タイム（秒）。プラスなら目標のほうが速い */
+  secGap: number;
+};
+
+/**
+ * 目標タイムと今の実力の差。
+ *
+ * 「そのタイムで走る」ことと「その VDOT を持っている」ことは同じなので、
+ * 目標タイムをそのまま VDOT に直して引き算する。
+ */
+export function goalGap(vdot: number, goalSec: number): GoalGap | null {
+  const goalVdot = vdotOf(MARATHON_M, goalSec);
+  if (goalVdot === null) return null;
+  return {
+    goalSec,
+    goalVdot,
+    vdotGap: goalVdot - vdot,
+    secGap: predictSec(vdot, MARATHON_M) - goalSec,
+  };
+}
+
 export type MarathonOutlook = {
   /** VDOT どおりに走れた場合（秒） */
   optimistic: number;

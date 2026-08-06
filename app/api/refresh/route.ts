@@ -7,5 +7,6 @@ export async function POST() {
   revalidateTag("runs", "max");
   revalidateTag("daily", "max");
   revalidateTag("fit", "max");
+  revalidateTag("settings", "max");
   return NextResponse.json({ ok: true, at: new Date().toISOString() });
 }

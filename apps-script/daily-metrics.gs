@@ -305,6 +305,45 @@ function normalizeStart(raw) {
   );
 }
 
+/**
+ * 「Settings」タブを作って、キーの行を並べておく。
+ *
+ * **Apps Script のエディタから手で 1 回だけ実行する。** 値は自分で書き込む想定で、
+ * アプリは読むだけ。キー名を手で打ち間違えると黙って既定値に落ちるので、
+ * 名前だけ用意しておく。既にあるキーは触らない（値を消さないため）。
+ */
+function setupSettingsSheet() {
+  const keys = [
+    ["goal_marathon_time", "3:30:00 のように書く"],
+    ["race_date", "2027/03/14 のように書く。未定なら空のまま"],
+    ["training_days", "Tue,Thu,Sat,Sun / 火・木・土・日 のどちらでも"],
+    ["weekly_target_km", "40 のように書く。空なら環境変数の値を使う"],
+  ];
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Settings");
+  if (!sheet) {
+    sheet = ss.insertSheet("Settings");
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["key", "value", "メモ"]);
+    sheet.setFrozenRows(1);
+  }
+
+  const last = sheet.getLastRow();
+  const existing = {};
+  if (last > 1) {
+    const rows = sheet.getRange(2, 1, last - 1, 1).getValues();
+    for (let i = 0; i < rows.length; i++) existing[String(rows[i][0]).trim()] = true;
+  }
+
+  for (let i = 0; i < keys.length; i++) {
+    if (!existing[keys[i][0]]) sheet.appendRow([keys[i][0], "", keys[i][1]]);
+  }
+
+  return "Settings タブを用意しました。value 列に自分で書き込んでください。";
+}
+
 /** ブラウザで /exec を開いたときの動作確認用 */
 function doGet() {
   return reply({ ok: true, message: "エンドポイントは生きています。POST してください。" });

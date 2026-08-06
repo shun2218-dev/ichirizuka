@@ -66,7 +66,7 @@ npm run build
 ```
 app/page.tsx             画面の組み立て（サーバーコンポーネント）
 app/api/refresh/route.ts キャッシュ破棄
-lib/sheet.ts             CSV 取得とパース（表記ゆれの吸収）。Running / Daily / Fit タブ
+lib/sheet.ts             CSV 取得とパース（表記ゆれの吸収）。Running / Daily / Fit / Settings タブ
 lib/metrics.ts           週/月の集計、ベスト、負荷、日次指標、強度の配分
 lib/vdot.ts              VDOT・予測タイム・練習ペース
 lib/format.ts            ペース・時間・色の整形
