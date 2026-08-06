@@ -6,9 +6,11 @@
 
 ```
 HealthFit (iPhone) ─→ Running タブ ─┐
-                                    ├─→ (CSV) ─→ Next.js ─→ ダッシュボード
-ショートカット/GAS ─→ Daily タブ  ──┘
-        （どちらも同じ Google スプレッドシート）
+                                    │
+ショートカット/GAS ─→ Daily タブ  ──┼─→ (CSV) ─→ Next.js ─→ ダッシュボード
+                                    │
+HealthFit → Drive → FIT → Fit タブ ─┘
+          （すべて同じ Google スプレッドシート）
 ```
 
 書き込み側はアプリの管轄外。アプリは**読み取り専用**。
@@ -64,6 +66,36 @@ Daily タブは `SHEET_DAILY_GID`（または `SHEET_DAILY_CSV_URL`）を設定�
 | sleepHours | `Sleep Hours` / `Sleep` / `睡眠時間` | 時間 | |
 
 `Received At` は読まない。指標が 1 つも入っていない行（日付だけの行）はスキップする。
+
+### Fit タブの列
+
+`scripts/import-fit.mjs` が FIT ファイルから作って書き込む列。取り込み手順は
+[fit-import-setup.md](fit-import-setup.md) を参照。
+
+**Running タブの平均心拍だけでは強度の配分（80/20）が測れない**ため、ゾーンごとの
+滞在時間をここで持つ。同じ距離を淡々と走った日とインターバルを入れた日は平均心拍が
+一致しうるので、精度ではなく区別する情報の有無の問題になる。
+
+| 内部名 | ヘッダー | 単位 | 備考 |
+| --- | --- | --- | --- |
+| start | `Start` / `開始日時` | | Running タブと突き合わせるキー。`yyyy/MM/dd HH:mm:ss` |
+| movingSec | `Moving Sec` | 秒 | |
+| distanceM | `Distance M` | m | |
+| avgHr / maxHr | `Avg HR` / `Max HR` | bpm | そのランの実測 |
+| zoneSec | `Zone 0 Sec` 〜 `Zone 5 Sec` | 秒 | **ゾーン 0 は「ゾーン 1 の下限より下」** |
+| zoneBounds | `Zone Bounds` | bpm | `97/117/136/155/175/194` の形 |
+| maxHrSetting | `Max HR Setting` | bpm | 設定値。既定は年齢式による推定 |
+| restingHr | `Resting HR` | bpm | そのランの時点の値 |
+| laps / lapTrigger | `Laps` / `Lap Trigger` | | `distance` なら距離オートラップで構造化練習ではない |
+| rpe | `RPE` | 1–10 | HealthFit の推定値。自己申告とは別物 |
+| avgCadence | `Avg Cadence` | spm | |
+
+ゾーンが 1 つも入っていない行はスキップする（取り込みの目的を果たしていないため）。
+**秒単位の記録は入れない。** FIT には 1 秒ごとの心拍・位置・標高もあるが、シートに
+置くと 1 ラン数百行になる。
+
+Fit タブは `SHEET_FIT_GID`（または `SHEET_FIT_CSV_URL`）を設定したときだけ読む。
+Daily と同じく**未設定・読み取り失敗・0 件のいずれでも例外にしない**。
 
 ### パースの方針
 
@@ -176,7 +208,7 @@ Running のシートが読めない場合、集計を行わず設定手順の案
 
 ### 更新
 
-ページは 600 秒キャッシュ。「シートを読み直す」を押すと `POST /api/refresh` が `runs` と `daily` の両タグを破棄する。シート側の反映ラグは解消しない。
+ページは 600 秒キャッシュ。「シートを読み直す」を押すと `POST /api/refresh` が `runs` / `daily` / `fit` のタグを破棄する。シート側の反映ラグは解消しない。
 
 ## 環境変数
 
@@ -187,6 +219,8 @@ Running のシートが読めない場合、集計を行わず設定手順の案
 | `SHEET_CSV_URL` | – | — | 指定するとこの URL を直接読む（上 2 つは無視） |
 | `SHEET_DAILY_GID` | – | — | Daily タブの `#gid=` の数字。設定するとコンディションを表示する |
 | `SHEET_DAILY_CSV_URL` | – | — | Daily タブの CSV URL を直接指定する |
+| `SHEET_FIT_GID` | – | — | Fit タブの `#gid=` の数字。FIT の取り込み結果を読む |
+| `SHEET_FIT_CSV_URL` | – | — | Fit タブの CSV URL を直接指定する |
 | `WEEKLY_TARGET_KM` | – | `30` | 週の目標距離 |
 | `APP_TIMEZONE` | – | `Asia/Tokyo` | 日付境界の判定に使う |
 
@@ -195,3 +229,4 @@ Running のシートが読めない場合、集計を行わず設定手順の案
 ## 関連ドキュメント
 
 - 日次のヘルスケア数値をシートに足す手順: [daily-metrics-setup.md](daily-metrics-setup.md)
+- FIT から心拍ゾーン滞在時間を取り込む手順: [fit-import-setup.md](fit-import-setup.md)
