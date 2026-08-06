@@ -60,6 +60,8 @@ Google Fonts から `app/layout.tsx` で読み込む。`preconnect` 済み。
 
 **数値は必ず等幅（`--mono`）にする。** テーブルの数値セルには `className="mono"` を付ける。桁が揃わないと比較できないため。
 
+テーブルのセルは既定で右寄せ（数値が主だから）。**説明文が入る列には `className="text"`** を付けて左寄せ・折り返しありにする。
+
 本文は 15px / line-height 1.6。
 
 ### eyebrow
