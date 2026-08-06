@@ -345,6 +345,85 @@ a {
   margin-top: 6px;
 }
 
+/* ── 強度の配分 ─────────────────────────────── */
+
+.intensity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin: 18px 0 0;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+
+.intensity-tile {
+  background: var(--card);
+  padding: 14px 16px 16px;
+}
+
+.intensity-tile dt {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.intensity-tile dt small {
+  margin-left: 8px;
+  color: var(--faint);
+  letter-spacing: 0;
+}
+
+.intensity-tile dd {
+  margin: 6px 0 0;
+  font-family: var(--display);
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.intensity-tile dd small {
+  margin-left: 3px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--faint);
+}
+
+/* 3 つの帯を横に並べた 1 本の帯。合計は必ず 100% になる */
+.intensity-track {
+  position: relative;
+  display: flex;
+  height: 10px;
+  margin-top: 16px;
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+.intensity-fill {
+  height: 100%;
+}
+
+/* easy 80% の目安。達成度ではなく位置を示すだけなので細い線にとどめる */
+.intensity-mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--ink);
+}
+
+@media (max-width: 780px) {
+  .intensity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .intensity-tile dd {
+    font-size: 34px;
+  }
+}
+
 /* ── コンディション（日次の指標）─────────────── */
 
 .condition-grid {
