@@ -56,6 +56,7 @@ fetch(url, { next: { revalidate: 600, tags: ["runs"] } });
 | `components/` | 再利用する描画部品（SVG グラフ、ボタン） |
 | `lib/sheet.ts` | CSV の取得とパース。外部データの揺れをここで吸収する |
 | `lib/metrics.ts` | 集計・統計。日付境界の計算もここ |
+| `lib/vdot.ts` | VDOT と予測タイム・練習ペース。シートにも React にも依存しない |
 | `lib/format.ts` | 表示用の整形（ペース、時間、色）。ロジックを持たない |
 | `apps-script/` | Google Apps Script（アプリ本体とは独立） |
 

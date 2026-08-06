@@ -345,6 +345,48 @@ a {
   margin-top: 6px;
 }
 
+/* ── 今の実力（VDOT）───────────────────────── */
+
+.vdot {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 1px;
+  margin-top: 18px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+
+.vdot > div {
+  background: var(--card);
+  padding: 16px 18px 18px;
+}
+
+.vdot-range {
+  font-family: var(--display);
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--ink);
+}
+
+/* 「〜」だけ小さくして、2 つの数値が主役に見えるようにする */
+.vdot-range span {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--faint);
+}
+
+@media (max-width: 780px) {
+  .vdot {
+    grid-template-columns: 1fr;
+  }
+
+  .vdot-range {
+    font-size: 30px;
+  }
+}
+
 /* ── 強度の配分 ─────────────────────────────── */
 
 .intensity-grid {
@@ -527,6 +569,13 @@ th {
 th:first-child,
 td:first-child {
   text-align: left;
+}
+
+/* 数値ではなく説明文が入る列。右寄せだと読みにくく、折り返しも要る */
+th.text,
+td.text {
+  text-align: left;
+  white-space: normal;
 }
 
 tbody tr:last-child td {

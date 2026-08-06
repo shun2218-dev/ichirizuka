@@ -29,6 +29,15 @@ import {
 } from "@/lib/metrics";
 import type { DailyResult, FitResult } from "@/lib/sheet";
 import { dailyCsvUrl, fetchDaily, fetchFit, fetchRuns, sheetCsvUrl } from "@/lib/sheet";
+import type { MarathonOutlook, VdotEstimate } from "@/lib/vdot";
+import {
+  MARATHON_LONG_RUN_KM,
+  MARATHON_WEEKLY_KM,
+  estimateVdot,
+  marathonOutlook,
+  raceEquivalents,
+  trainingPaces,
+} from "@/lib/vdot";
 
 export const revalidate = 600;
 
@@ -66,6 +75,15 @@ export default async function Page() {
   const scatterRuns = o.runs.filter((r) => r.start >= scatterFrom);
   const monthPeak = Math.max(...o.months.map((m) => m.km), 1);
   const condition = daily.days.length ? buildCondition(daily.days, o.weeks, now) : null;
+
+  // 実力の推定は直近 180 日から。古い記録を混ぜると「今の実力」ではなくなる
+  const vdotFrom = addDays(startOfDay(now), -180);
+  const vdot = estimateVdot(o.runs, vdotFrom);
+  const longestRecentKm = Math.max(
+    0,
+    ...o.runs.filter((r) => r.start >= vdotFrom).map((r) => r.distance),
+  );
+  const outlook = vdot ? marathonOutlook(vdot.vdot, o.last28.km / 4, longestRecentKm) : null;
 
   const fit = await fitPromise;
   const intensityFrom = addDays(startOfDay(now), -INTENSITY_DAYS);
@@ -204,6 +222,8 @@ export default async function Page() {
         </div>
       </section>
 
+      <VdotSection estimate={vdot} outlook={outlook} />
+
       <IntensitySection
         fit={fit}
         split={intensity}
@@ -318,6 +338,111 @@ export default async function Page() {
         )}
       </p>
     </>
+  );
+}
+
+function VdotSection({
+  estimate,
+  outlook,
+}: {
+  estimate: VdotEstimate | null;
+  outlook: MarathonOutlook | null;
+}) {
+  if (!estimate || !outlook) return null;
+
+  const p = trainingPaces(estimate.vdot);
+  const rows: { label: string; pace: string; note: string }[] = [
+    { label: "E — イージー", pace: `${pace(p.easyFast)}〜${pace(p.easySlow)}`, note: "土台。走行距離の大半をここに置く" },
+    { label: "M — マラソン", pace: pace(p.marathon), note: "本番のペース感覚" },
+    { label: "T — 閾値", pace: pace(p.threshold), note: "20分走やクルーズインターバル" },
+    { label: "I — インターバル", pace: pace(p.interval), note: "3〜5分 × 数本" },
+    { label: "R — レペティション", pace: pace(p.repetition), note: "短く速く。式の外挿なので目安" },
+  ];
+
+  return (
+    <section className="section">
+      <h2>今の実力</h2>
+      <p className="section-note">
+        いちばん速く走れた 1 本から VDOT を出し、そこから他の距離のタイムと練習ペースを導いたもの。
+      </p>
+
+      <div className="vdot">
+        <div>
+          <p className="eyebrow">VDOT</p>
+          <div className="load-value">{decimal(estimate.vdot, 1)}</div>
+          <p className="stat-sub">
+            {shortDate(estimate.run.start)}の{km(estimate.run.distance)}km（{clock(estimate.run.movingSec)}
+            ・{pace(estimate.run.pace)}/km）から
+          </p>
+        </div>
+
+        <div>
+          <p className="eyebrow">フルマラソンの予測</p>
+          <div className="vdot-range">
+            {clock(outlook.optimistic)}
+            <span> 〜 </span>
+            {clock(outlook.realistic)}
+          </div>
+          <p className="stat-sub">
+            {outlook.ready
+              ? `週${km(outlook.weeklyKm)}km・最長${km(outlook.longestKm)}km 走っている。VDOT どおりに走れる想定。`
+              : `週${km(outlook.weeklyKm)}km・最長${km(outlook.longestKm)}km。目安の週${MARATHON_WEEKLY_KM}km・${MARATHON_LONG_RUN_KM}km 走に届いていないので、速いほうの数字は出ない前提で見る。`}
+          </p>
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>距離</th>
+              {raceEquivalents(estimate.vdot).map((r) => (
+                <th key={r.label} className="num">
+                  {r.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>等価タイム</td>
+              {raceEquivalents(estimate.vdot).map((r) => (
+                <td key={r.label} className="num mono">
+                  {clock(r.sec)}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>練習ペース</th>
+              <th className="num">分/km</th>
+              <th className="text">使いどころ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.label}>
+                <td>{r.label}</td>
+                <td className="num mono">{r.pace}</td>
+                <td className="text">{r.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="footnote">
+        根拠にしたのはレースではなく普段の練習なので、全力で走った 1 本が無ければ実力より低く出る。
+        つまりこの値は下限とみて、上振れより下振れを疑うほうが正しい。
+        短い距離からマラソンを外挿すると速すぎる予測が出るが、原因は心肺能力ではなく走り込み量。
+      </p>
+    </section>
   );
 }
 
