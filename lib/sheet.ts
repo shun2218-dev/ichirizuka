@@ -103,9 +103,15 @@ const EMPTY_SETTINGS: Settings = {
 
 const SECONDS_IN_DAY = 86400;
 
-/** gviz なら「リンクを知っている全員が閲覧可」だけで読める（ウェブ公開は不要） */
-function gvizUrl(id: string, gid: string): string {
-  return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&gid=${gid}`;
+/**
+ * CSV の取得先。「リンクを知っている全員が閲覧可」だけで読める（ウェブ公開は不要）。
+ *
+ * **gviz ではなく export を使う。** gviz は Google 側のキャッシュが強く、シートを
+ * 編集しても古い内容を返し続けることがある。クエリを足しても破棄できず、こちらの
+ * キャッシュをいくら消しても直らないため「シートを読み直す」が効かなくなる。
+ */
+function csvUrl(id: string, gid: string): string {
+  return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
 }
 
 export function sheetCsvUrl(): string {
@@ -119,7 +125,7 @@ export function sheetCsvUrl(): string {
       "SHEET_ID が設定されていません。.env.local に SHEET_ID と SHEET_GID を入れてください。",
     );
   }
-  return gvizUrl(id, gid);
+  return csvUrl(id, gid);
 }
 
 /**
@@ -133,7 +139,7 @@ export function dailyCsvUrl(): string | null {
   const id = process.env.SHEET_ID;
   const gid = process.env.SHEET_DAILY_GID;
   if (!id || !gid) return null;
-  return gvizUrl(id, gid);
+  return csvUrl(id, gid);
 }
 
 /**
@@ -147,7 +153,7 @@ export function fitCsvUrl(): string | null {
   const id = process.env.SHEET_ID;
   const gid = process.env.SHEET_FIT_GID;
   if (!id || !gid) return null;
-  return gvizUrl(id, gid);
+  return csvUrl(id, gid);
 }
 
 /**
@@ -161,7 +167,7 @@ export function settingsCsvUrl(): string | null {
   const id = process.env.SHEET_ID;
   const gid = process.env.SHEET_SETTINGS_GID;
   if (!id || !gid) return null;
-  return gvizUrl(id, gid);
+  return csvUrl(id, gid);
 }
 
 /** ダブルクォート・改行入りセルに対応した最小限の CSV パーサ */
@@ -249,7 +255,7 @@ function parseOptionalNumber(raw: string): number | null {
 }
 
 /**
- * 日付の桁の並びは gviz が返す表示形式（＝シートのロケール）任せなので、
+ * 日付の桁の並びはシートのロケール（表示形式）任せなので、
  * 年が先（2026/07/26）でも後ろ（07/26/2026）でも読めるようにしておく。
  */
 function parseDateParts(dateRaw: string): [number, number, number] | null {
