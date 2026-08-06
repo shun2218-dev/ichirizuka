@@ -126,11 +126,74 @@ subject は日本語で可。命令形にこだわらず、何をしたかが分
 
 ## リリース手順
 
-1. `develop` の内容で `npm run build` が通ることを確認
-2. `develop` → `main` の PR を作成し、含まれる変更を一覧に書く（Issue のクローズは扱わない）
-3. マージ
-4. 必要に応じて `main` にタグを打ち、GitHub Releases でリリースノートを作る
-5. Milestone を使っている場合は該当マイルストーンを閉じる
+### 1. 中身を確認する
+
+```bash
+git checkout develop && git pull
+npm run build
+git log --oneline origin/main..origin/develop
+```
+
+`npm run build` が通らないものはリリースしない。最後のコマンドで出た一覧が、そのまま
+リリース内容になる。
+
+### 2. バージョンを決める
+
+[セマンティックバージョニング](https://semver.org/lang/ja/)に従う。個人用なので厳密に
+運用する必要はないが、次を目安にする。
+
+| 上げる桁 | 目安 |
+| --- | --- |
+| patch (`0.1.1`) | バグ修正、文言修正、依存更新のみ |
+| minor (`0.2.0`) | 画面や集計の追加・変更。**通常はこれ** |
+| major (`1.0.0`) | 作り直しに近い変更。当面使わない |
+
+`package.json` の `version` を上げ、**`develop` に載せてからリリースする**（`main` へは
+直接 push しない）。タグ名は `v` を付けて `v0.2.0` とする。
+
+### 3. リリース PR
+
+```bash
+gh pr create --base main --head develop --title "release: <一言で内容>"
+```
+
+本文には次を書く。
+
+- **リリース内容の一覧**（Issue 番号を添える。`Closes` は使わない）
+- **デプロイ後に必要な設定**があれば明記する（環境変数の追加など）
+- 確認したこと
+
+Issue のクローズは扱わない。トピック PR の時点で閉じている。
+
+### 4. マージ
+
+**merge commit を使う。** squash すると `develop` の履歴が `main` と繋がらなくなる。
+
+```bash
+gh pr merge <N> --merge
+```
+
+`--delete-branch` は付けない。`develop` は消さない。
+
+### 5. タグと Release
+
+```bash
+gh release create v0.2.0 --target main --title "v0.2.0 — <一言>" --notes "..."
+```
+
+`gh release create` はタグも同時に作るので、`main` を手元に取ってきて push する必要はない。
+
+リリースノートは自動生成（`--generate-notes`）に頼らず、**読んで何が変わったか分かる日本語**で
+書く。追加 / 変更 / 設定 の 3 つに分けると書きやすい。
+
+### 6. 反映を確認する
+
+- Vercel のデプロイが成功したか
+- **新しい環境変数が必要な場合、Vercel に入れたか。** 入れたあと再デプロイが要る
+- Milestone を使っている場合は該当マイルストーンを閉じる
+
+環境変数が無いと機能しない変更は、**無くても落ちない作り**にしておくこと（設定するまでその
+セクションが出ないだけ、など）。デプロイと設定の順番に依存しなくなる。
 
 ## 秘匿情報
 

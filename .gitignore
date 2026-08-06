@@ -5,3 +5,7 @@ node_modules
 next-env.d.ts
 *.tsbuildinfo
 .vercel
+
+# 署名済みショートカット。署名に自分の証明書が入るのと、再生成できるためコミットしない
+# （中身は shortcuts/*.plist で読める）
+shortcuts/*.shortcut
