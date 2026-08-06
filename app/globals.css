@@ -428,6 +428,58 @@ a {
   }
 }
 
+/* ── 今週のメニュー ─────────────────────────── */
+
+.plan-head {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 1px;
+  margin: 18px 0;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+
+.plan-head > div {
+  background: var(--card);
+  padding: 14px 18px 16px;
+}
+
+.plan-phase {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.plan-phase.mono {
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 500;
+}
+
+/* 調整した理由。箇条書きだが記号は罫線で代える */
+.plan-notes {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+.plan-notes li {
+  padding-left: 14px;
+  border-left: 2px solid var(--rule);
+  margin-top: 8px;
+}
+
+@media (max-width: 780px) {
+  .plan-head {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── 強度の配分 ─────────────────────────────── */
 
 .intensity-grid {
