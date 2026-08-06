@@ -21,11 +21,13 @@ HealthFit → Drive → FIT → Fit タブ ─┤
 
 ### 取得方法
 
-`gviz` エンドポイントから CSV を取得する。シートを「リンクを知っている全員が閲覧可」にするだけで読める（ウェブ公開は不要）。
+`export` エンドポイントから CSV を取得する。シートを「リンクを知っている全員が閲覧可」にするだけで読める（ウェブ公開は不要）。
 
 ```
-https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&gid=<SHEET_GID>
+https://docs.google.com/spreadsheets/d/<SHEET_ID>/export?format=csv&gid=<SHEET_GID>
 ```
+
+**`gviz` は使わない。** Google 側のキャッシュが強く、シートを編集しても古い内容を返し続けることがある。クエリパラメータを足しても破棄できず、アプリ側のキャッシュをいくら消しても直らないため「シートを読み直す」が効かなくなる。
 
 `SHEET_CSV_URL` を指定した場合はそちらを優先する。
 
