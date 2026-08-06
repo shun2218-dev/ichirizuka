@@ -17,6 +17,7 @@ import {
   timeOfDay,
 } from "@/lib/format";
 import type { Condition, DailyMetricSummary, IntensitySplit } from "@/lib/metrics";
+import type { DailyMetricKey } from "@/lib/sheet";
 import {
   addDays,
   buildCondition,
@@ -36,6 +37,8 @@ import {
   fetchSettings,
   sheetCsvUrl,
 } from "@/lib/sheet";
+import type { Phase, WeeklyPlan, WorkoutKind } from "@/lib/plan";
+import { buildWeeklyPlan } from "@/lib/plan";
 import type { MarathonOutlook, VdotEstimate } from "@/lib/vdot";
 import {
   MARATHON_LONG_RUN_KM,
@@ -48,6 +51,22 @@ import {
 } from "@/lib/vdot";
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+const PHASE_LABELS: Record<Phase, string> = {
+  maintain: "積み上げ（レース日は未定）",
+  base: "基礎づくり",
+  build: "強化",
+  peak: "仕上げ",
+  taper: "調整（テーパー）",
+};
+
+const KIND_LABELS: Record<WorkoutKind, string> = {
+  easy: "イージー",
+  long: "ロング",
+  threshold: "閾値（T）",
+  interval: "インターバル（I）",
+  marathon: "マラソンペース（M）",
+};
 
 export const revalidate = 600;
 
@@ -96,6 +115,39 @@ export default async function Page() {
     ...o.runs.filter((r) => r.start >= vdotFrom).map((r) => r.distance),
   );
   const outlook = vdot ? marathonOutlook(vdot.vdot, o.last28.km / 4, longestRecentKm) : null;
+
+  // レース日は未定でよいので、あるときだけ残り週数を出す
+  const weeksToRace = settings.raceDate
+    ? Math.floor((+settings.raceDate - +startOfDay(now)) / (86400000 * 7))
+    : null;
+
+  /**
+   * 疲労のサイン。安静時心拍が上がっている / HRV が下がっているとき。
+   *
+   * しきい値（1.5bpm / 3ms）は前週比の測定ノイズを越える程度という目安で、
+   * 根拠のある定数ではない。**質練習を減らす方向にしか使わない**ので、
+   * 外しても危険側には倒れない。
+   */
+  const deltaOf = (key: DailyMetricKey) =>
+    condition?.metrics.find((m) => m.key === key)?.delta ?? null;
+  const restingDelta = deltaOf("restingHr");
+  const hrvDelta = deltaOf("hrv");
+  const fatigued =
+    (restingDelta !== null && restingDelta > 1.5) || (hrvDelta !== null && hrvDelta < -3);
+
+  const plan =
+    vdot && outlook
+      ? buildWeeklyPlan({
+          paces: trainingPaces(vdot.vdot),
+          chronicKm: o.last28.km / 4,
+          longestRecentKm,
+          load: o.load,
+          trainingDays: settings.trainingDays,
+          targetKm: o.targetKm,
+          weeksToRace,
+          fatigued,
+        })
+      : null;
 
   const fit = await fitPromise;
   const intensityFrom = addDays(startOfDay(now), -INTENSITY_DAYS);
@@ -234,7 +286,14 @@ export default async function Page() {
         </div>
       </section>
 
-      <VdotSection estimate={vdot} outlook={outlook} settings={settings} now={now} />
+      <VdotSection
+        estimate={vdot}
+        outlook={outlook}
+        settings={settings}
+        weeksToRace={weeksToRace}
+      />
+
+      <PlanSection plan={plan} />
 
       <IntensitySection
         fit={fit}
@@ -357,21 +416,16 @@ function VdotSection({
   estimate,
   outlook,
   settings,
-  now,
+  weeksToRace,
 }: {
   estimate: VdotEstimate | null;
   outlook: MarathonOutlook | null;
   settings: Settings;
-  now: Date;
+  weeksToRace: number | null;
 }) {
   if (!estimate || !outlook) return null;
 
   const gap = settings.goalMarathonSec ? goalGap(estimate.vdot, settings.goalMarathonSec) : null;
-  // レース日は未定でよいので、あるときだけ残り週数を出す
-  const weeksToRace = settings.raceDate
-    ? Math.floor((+settings.raceDate - +startOfDay(now)) / (86400000 * 7))
-    : null;
-
   const p = trainingPaces(estimate.vdot);
   const rows: { label: string; pace: string; note: string }[] = [
     { label: "E — イージー", pace: `${pace(p.easyFast)}〜${pace(p.easySlow)}`, note: "土台。走行距離の大半をここに置く" },
@@ -497,6 +551,77 @@ function VdotSection({
         根拠にしたのはレースではなく普段の練習なので、全力で走った 1 本が無ければ実力より低く出る。
         つまりこの値は下限とみて、上振れより下振れを疑うほうが正しい。
         短い距離からマラソンを外挿すると速すぎる予測が出るが、原因は心肺能力ではなく走り込み量。
+      </p>
+    </section>
+  );
+}
+
+function PlanSection({ plan }: { plan: WeeklyPlan | null }) {
+  if (!plan || !plan.workouts.length) return null;
+
+  return (
+    <section className="section">
+      <h2>今週のメニュー</h2>
+      <p className="section-note">
+        今の実力から出したペースを、走れる量に合わせて割ったもの。提案であって処方ではないので、
+        体調と予定に合わせて動かしてよい。
+      </p>
+
+      <div className="plan-head">
+        <div>
+          <p className="eyebrow">時期</p>
+          <div className="plan-phase">{PHASE_LABELS[plan.phase]}</div>
+          {plan.weeksToRace !== null && (
+            <p className="stat-sub">レースまで{plan.weeksToRace}週</p>
+          )}
+        </div>
+        <div>
+          <p className="eyebrow">週の合計</p>
+          <div className="plan-phase mono">{km(plan.totalKm)}km</div>
+          <p className="stat-sub">{plan.workouts.length}本</p>
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>曜日</th>
+              <th className="text">練習</th>
+              <th className="num">距離</th>
+              <th className="num">ペース</th>
+              <th className="text">やりかた</th>
+            </tr>
+          </thead>
+          <tbody>
+            {plan.workouts.map((w, i) => (
+              <tr key={i}>
+                <td>{w.day === null ? "—" : WEEKDAY_LABELS[w.day]}</td>
+                <td className="text">{KIND_LABELS[w.kind]}</td>
+                <td className="num mono">{km(w.km)}km</td>
+                <td className="num mono">
+                  {pace(w.paceSec)}
+                  {w.paceSecSlow ? `〜${pace(w.paceSecSlow)}` : ""}
+                </td>
+                <td className="text">{w.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {plan.notes.length > 0 && (
+        <ul className="plan-notes">
+          {plan.notes.map((n, i) => (
+            <li key={i}>{n}</li>
+          ))}
+        </ul>
+      )}
+
+      <p className="footnote">
+        質練習の量は週の走行距離に対する割合で決めている（閾値 10% / インターバル 8%）。
+        回数ではなく量で縛るのは、走れる日数が少なくても 8 割を楽に走る配分が崩れないため。
+        曜日が「—」の行は、走れる曜日を Settings タブに書くと埋まる。
       </p>
     </section>
   );
