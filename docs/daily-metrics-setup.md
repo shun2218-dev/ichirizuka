@@ -66,12 +66,13 @@ node scripts/build-shortcuts.mjs
   設定は保持されて iPhone 側で動きます
 - **iPhone**: `.shortcut` を AirDrop → ファイル App でタップ → 追加
 
-**取り込んだら 2 か所を書き換えます。**
+**書き換えるのは先頭の 2 アクションだけです。** どちらも変数にまとめてあるので、
+5 指標ぶん直す必要はありません。
 
-1. 先頭の「テキスト」の `PASTE_NEW_TOKEN_HERE` を自分のトークンに
-   （変数 `token` にまとめてあるので、5 指標ぶん書き換える必要はありません）
-2. 「URL の内容を取得」の `PASTE_WEBAPP_URL_HERE` を Step 1 のウェブアプリ URL に
-   （こちらはアクションのパラメータなので 5 か所あります。1 つ直してコピペしてください）
+| アクション | 置き換える値 | |
+| --- | --- | --- |
+| 1 個目の「テキスト」→ 変数 `token` | `PASTE_NEW_TOKEN_HERE` | Apps Script の `TOKEN` と同じ文字列 |
+| 2 個目の「テキスト」→ 変数 `endpoint` | `PASTE_WEBAPP_URL_HERE` | Step 1 のウェブアプリ URL。`.env.local` の `SHEET_WEBAPP_URL` と同じもの |
 
 そのまま Step 3 へ進めます。
 

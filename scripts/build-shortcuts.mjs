@@ -94,7 +94,7 @@ function buildWorkflow({ daysBack, windowDays }) {
   const push = (id, params) =>
     actions.push({ WFWorkflowActionIdentifier: id, WFWorkflowActionParameters: params });
 
-  // トークンは 1 か所にまとめる。5 指標ぶん書き換えるのは事故のもと
+  // トークンと URL は先頭で変数にする。5 指標ぶん散らばっていると書き換え漏れが起きる
   const tokenUuid = uuid();
   push("is.workflow.actions.gettext", {
     UUID: tokenUuid,
@@ -103,6 +103,16 @@ function buildWorkflow({ daysBack, windowDays }) {
   push("is.workflow.actions.setvariable", {
     WFVariableName: "token",
     WFInput: outputRef(tokenUuid, "テキスト"),
+  });
+
+  const urlUuid = uuid();
+  push("is.workflow.actions.gettext", {
+    UUID: urlUuid,
+    WFTextActionText: URL_PLACEHOLDER,
+  });
+  push("is.workflow.actions.setvariable", {
+    WFVariableName: "endpoint",
+    WFInput: outputRef(urlUuid, "テキスト"),
   });
 
   if (daysBack > 0) {
@@ -231,7 +241,9 @@ function buildWorkflow({ daysBack, windowDays }) {
 
     push("is.workflow.actions.downloadurl", {
       UUID: uuid(),
-      WFURL: URL_PLACEHOLDER,
+      // URL 欄はテキストフィールドなので変数を差し込める。5 か所に URL を直書きすると
+      // デプロイし直して URL が変わったときに全部直すことになる
+      WFURL: tokenString([{ VariableName: "endpoint", Type: "Variable" }]),
       WFHTTPMethod: "POST",
       WFHTTPBodyType: "File",
       WFRequestVariable: outputRef(bodyUuid, "テキスト"),
