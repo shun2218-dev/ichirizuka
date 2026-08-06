@@ -122,8 +122,8 @@ function summarize(file) {
   if (!Decoder.isFIT(stream)) return { file, error: "FIT ファイルではありません" };
 
   const decoder = new Decoder(stream);
-  // CRC が合わなくても読める分は使う。HealthFit の書き出しで末尾の CRC が
-  // 一致しない個体を確認しており、ここで弾くと 1 本も取り込めなくなる。
+  // CRC が合わなくても読める分は使う。同期の途中で切れたファイルが 1 本混ざった
+  // だけで全体が止まるほうが困る。件数は呼び出し側で警告として出す。
   const { messages, errors } = decoder.read();
 
   const session = messages.sessionMesgs?.[0];
