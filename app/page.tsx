@@ -1,4 +1,5 @@
 import ConditionChart from "@/components/ConditionChart";
+import IntensityStrip from "@/components/IntensityStrip";
 import PaceScatter from "@/components/PaceScatter";
 import RefreshButton from "@/components/RefreshButton";
 import YearStrip from "@/components/YearStrip";
@@ -15,19 +16,33 @@ import {
   signed,
   timeOfDay,
 } from "@/lib/format";
-import type { Condition, DailyMetricSummary } from "@/lib/metrics";
-import { addDays, buildCondition, buildOverview, startOfDay, wallClockNow } from "@/lib/metrics";
-import type { DailyResult } from "@/lib/sheet";
-import { dailyCsvUrl, fetchDaily, fetchRuns, sheetCsvUrl } from "@/lib/sheet";
+import type { Condition, DailyMetricSummary, IntensitySplit } from "@/lib/metrics";
+import {
+  addDays,
+  buildCondition,
+  buildOverview,
+  fitCoverage,
+  intensitySplit,
+  intensityWeeks,
+  startOfDay,
+  wallClockNow,
+} from "@/lib/metrics";
+import type { DailyResult, FitResult } from "@/lib/sheet";
+import { dailyCsvUrl, fetchDaily, fetchFit, fetchRuns, sheetCsvUrl } from "@/lib/sheet";
 
 export const revalidate = 600;
 
 /** コンディションのグラフに出す週数。52 週だと 1 本ずつが細くて折れ線が読めない */
 const CONDITION_WEEKS = 26;
 
+/** 強度の配分を集計する期間。短すぎると 1 本の練習で数字が跳ねる */
+const INTENSITY_DAYS = 84;
+
 export default async function Page() {
-  // fetchDaily は投げない契約なので、Running の失敗で早期 return しても未処理の拒否は出ない
+  // fetchDaily / fetchFit は投げない契約なので、Running の失敗で早期 return しても
+  // 未処理の拒否は出ない
   const dailyPromise = fetchDaily();
+  const fitPromise = fetchFit();
 
   let data: Awaited<ReturnType<typeof fetchRuns>>;
   try {
@@ -51,6 +66,11 @@ export default async function Page() {
   const scatterRuns = o.runs.filter((r) => r.start >= scatterFrom);
   const monthPeak = Math.max(...o.months.map((m) => m.km), 1);
   const condition = daily.days.length ? buildCondition(daily.days, o.weeks, now) : null;
+
+  const fit = await fitPromise;
+  const intensityFrom = addDays(startOfDay(now), -INTENSITY_DAYS);
+  const intensity = intensitySplit(fit.runs.filter((r) => r.start >= intensityFrom));
+  const coverage = fitCoverage(o.runs, fit.runs, intensityFrom);
 
   return (
     <>
@@ -184,6 +204,13 @@ export default async function Page() {
         </div>
       </section>
 
+      <IntensitySection
+        fit={fit}
+        split={intensity}
+        weeks={intensityWeeks(fit.runs, now, CONDITION_WEEKS)}
+        coverage={coverage}
+      />
+
       <ConditionSection daily={daily} condition={condition} />
 
       <section className="section">
@@ -294,6 +321,102 @@ export default async function Page() {
   );
 }
 
+/** 強度の 3 分割。低いほうから並べる */
+const INTENSITY_BANDS = [
+  { key: "easy", label: "easy", note: "80%未満", color: "var(--teal)" },
+  { key: "moderate", label: "moderate", note: "80–90%", color: "var(--amber)" },
+  { key: "hard", label: "hard", note: "90%以上", color: "var(--magenta)" },
+] as const;
+
+function IntensitySection({
+  fit,
+  split,
+  weeks,
+  coverage,
+}: {
+  fit: FitResult;
+  split: IntensitySplit;
+  weeks: ReturnType<typeof intensityWeeks>;
+  coverage: { withFit: number; total: number };
+}) {
+  if (!fit.configured) return null;
+
+  const pct = (sec: number) => (split.total > 0 ? (sec / split.total) * 100 : 0);
+
+  return (
+    <section className="section">
+      <h2>強度の配分</h2>
+      <p className="section-note">
+        心拍ゾーンの滞在時間を、最大心拍に対する割合で 3 つに分けたもの。楽な走りを 8 割、
+        強い走りを 2 割にすると伸びやすいとされる。直近{INTENSITY_DAYS}日。
+      </p>
+
+      {fit.error ? (
+        <div className="notice">
+          <p>Fit タブを読み込めませんでした（{fit.error}）。</p>
+        </div>
+      ) : split.total === 0 ? (
+        <div className="notice">
+          <p>
+            Fit タブは読めましたが、直近{INTENSITY_DAYS}日にゾーンの記録がありません。
+            <code>node scripts/import-fit.mjs &lt;dir&gt; --post</code> を実行したか確認してください。
+            手順は <code>docs/fit-import-setup.md</code> にあります。
+          </p>
+        </div>
+      ) : (
+        <>
+          <dl className="intensity-grid">
+            {INTENSITY_BANDS.map((b) => (
+              <div className="intensity-tile" key={b.key}>
+                <dt>
+                  <span className="chip" style={{ background: b.color }} /> {b.label}
+                  <small>{b.note}</small>
+                </dt>
+                <dd>
+                  {decimal(pct(split[b.key]), 0)}
+                  <small>%</small>
+                </dd>
+                <p className="stat-sub">{clock(split[b.key])}</p>
+              </div>
+            ))}
+          </dl>
+
+          <div className="intensity-track">
+            {INTENSITY_BANDS.map((b) => (
+              <div
+                key={b.key}
+                className="intensity-fill"
+                style={{ width: `${pct(split[b.key])}%`, background: b.color }}
+              />
+            ))}
+            <div className="intensity-mark" style={{ left: "80%" }} />
+          </div>
+          <div className="legend">
+            <span>縦線 = easy 80% の目安</span>
+          </div>
+
+          <div className="plot">
+            <IntensityStrip weeks={weeks} />
+          </div>
+          <div className="legend">
+            <span>棒の高さ = その週の合計時間、色が強度</span>
+            <span>直近{CONDITION_WEEKS}週</span>
+          </div>
+
+          <p className="footnote">
+            直近{INTENSITY_DAYS}日の{coverage.total}本のうち{coverage.withFit}本に FIT
+            の記録がある。
+            {coverage.withFit < coverage.total &&
+              "残りは取り込み前のランなので、この配分には入っていない。"}
+            ゾーンの境界は最大心拍の設定値から決まるが、これは年齢式による推定なので、
+            境界そのものにずれがありうる。
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function ConditionSection({
   daily,
   condition,
@@ -302,6 +425,7 @@ function ConditionSection({
   condition: Condition | null;
 }) {
   if (!daily.configured) return null;
+
 
   const missing = condition?.metrics.filter((m) => m.latest === null) ?? [];
   const rows = condition ? [...condition.days].reverse() : [];
