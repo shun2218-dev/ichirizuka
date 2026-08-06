@@ -1,4 +1,4 @@
-import type { Daily, DailyMetricKey, Run } from "./sheet";
+import type { Daily, DailyMetricKey, FitSummary, Run } from "./sheet";
 
 /** これより短い記録は誤タップ扱いで集計から外す（km） */
 export const NOISE_KM = 0.4;
@@ -118,7 +118,7 @@ export function personalBests(runs: Run[]) {
   });
 }
 
-export function buildOverview(allRuns: Run[], now: Date) {
+export function buildOverview(allRuns: Run[], now: Date, weeklyTargetKm?: number | null) {
   const runs = allRuns.filter((r) => r.distance >= NOISE_KM);
   const skipped = allRuns.length - runs.length;
 
@@ -146,7 +146,9 @@ export function buildOverview(allRuns: Run[], now: Date) {
   const last = runs[runs.length - 1] ?? null;
   const restDays = last ? Math.floor((+today - +startOfDay(last.start)) / 86400000) : null;
 
-  const targetKm = Number(process.env.WEEKLY_TARGET_KM ?? 30) || 30;
+  // シートの設定 → 環境変数 → 既定値。シートを優先するのは、再デプロイなしで
+  // 変えられるほうが実用に耐えるから
+  const targetKm = weeklyTargetKm ?? (Number(process.env.WEEKLY_TARGET_KM ?? 30) || 30);
 
   return {
     runs,
@@ -278,3 +280,88 @@ export function buildCondition(allDays: Daily[], weeks: WeekBucket[], now: Date)
 }
 
 export type Condition = ReturnType<typeof buildCondition>;
+
+/**
+ * 強度の 3 分割。
+ *
+ * 80/20 は閾値（LT1 / LT2）で切る 3 ゾーンモデルの話で、HealthFit の 5 ゾーン
+ * （%最大心拍）とは切り方が違う。5 ゾーンを %最大心拍に直したうえで割り当てる。
+ */
+export type IntensityBand = "easy" | "moderate" | "hard";
+
+/** LT1 / LT2 の目安（%最大心拍）。実測ではないので境界そのものに幅がある */
+const EASY_BELOW_PCT = 80;
+const HARD_FROM_PCT = 90;
+
+/**
+ * ゾーン i がどの帯に入るかを、**帯の中点**の %最大心拍で決める。
+ *
+ * 下限で判定すると設定変更をまたいだときに同じゾーンが別の帯へ落ちる。実際に
+ * 境界が 195 → 194 に変わった記録があり、ゾーン 4 の下限は 156/195 = 80.0% と
+ * 155/194 = 79.9% で easy と moderate に割れてしまう。中点なら両方 moderate。
+ */
+function bandOfZone(run: FitSummary, i: number): IntensityBand | null {
+  const max = run.maxHrSetting;
+  const upper = run.zoneBounds[i];
+  if (!max || !upper) return null;
+
+  const lower = i === 0 ? 0 : (run.zoneBounds[i - 1] ?? 0);
+  const mid = (((lower + upper) / 2) / max) * 100;
+  return mid < EASY_BELOW_PCT ? "easy" : mid < HARD_FROM_PCT ? "moderate" : "hard";
+}
+
+export type IntensitySplit = {
+  /** 秒 */
+  easy: number;
+  moderate: number;
+  hard: number;
+  total: number;
+  /** 集計に使えたラン数（ゾーンの境界が読めたもの） */
+  runs: number;
+};
+
+export function intensitySplit(fit: FitSummary[]): IntensitySplit {
+  const out: IntensitySplit = { easy: 0, moderate: 0, hard: 0, total: 0, runs: 0 };
+  for (const run of fit) {
+    let used = false;
+    run.zoneSec.forEach((sec, i) => {
+      const band = bandOfZone(run, i);
+      if (!band || sec <= 0) return;
+      out[band] += sec;
+      out.total += sec;
+      used = true;
+    });
+    if (used) out.runs++;
+  }
+  return out;
+}
+
+export type IntensityWeek = IntensitySplit & { start: Date; isCurrent: boolean };
+
+/** 週ごとの内訳。区切りは走行距離と同じ月曜起点にそろえる */
+export function intensityWeeks(fit: FitSummary[], now: Date, weeks = 26): IntensityWeek[] {
+  const currentWeek = startOfWeek(now);
+  const out: IntensityWeek[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const start = addDays(currentWeek, -7 * i);
+    const end = addDays(start, 7);
+    const inWeek = fit.filter((r) => r.start >= start && r.start < end);
+    out.push({ ...intensitySplit(inWeek), start, isCurrent: i === 0 });
+  }
+  return out;
+}
+
+/**
+ * Running の行のうち、何本が Fit タブと突き合ったか。
+ *
+ * 取り込みを始める前のランには FIT が無い。「8 割が moderate」のような数字を、
+ * 一部のランだけから出していないかを画面で言えるようにする。
+ */
+export function fitCoverage(runs: Run[], fit: FitSummary[], from: Date) {
+  const seen = new Set(fit.map((r) => r.start.getTime()));
+  const target = runs.filter((r) => r.distance >= NOISE_KM && r.start >= from);
+  return {
+    withFit: target.filter((r) => seen.has(r.start.getTime())).length,
+    total: target.length,
+  };
+}

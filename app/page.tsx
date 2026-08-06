@@ -1,4 +1,5 @@
 import ConditionChart from "@/components/ConditionChart";
+import IntensityStrip from "@/components/IntensityStrip";
 import PaceScatter from "@/components/PaceScatter";
 import RefreshButton from "@/components/RefreshButton";
 import YearStrip from "@/components/YearStrip";
@@ -15,19 +16,72 @@ import {
   signed,
   timeOfDay,
 } from "@/lib/format";
-import type { Condition, DailyMetricSummary } from "@/lib/metrics";
-import { addDays, buildCondition, buildOverview, startOfDay, wallClockNow } from "@/lib/metrics";
-import type { DailyResult } from "@/lib/sheet";
-import { dailyCsvUrl, fetchDaily, fetchRuns, sheetCsvUrl } from "@/lib/sheet";
+import type { Condition, DailyMetricSummary, IntensitySplit } from "@/lib/metrics";
+import type { DailyMetricKey } from "@/lib/sheet";
+import {
+  addDays,
+  buildCondition,
+  buildOverview,
+  fitCoverage,
+  intensitySplit,
+  intensityWeeks,
+  startOfDay,
+  wallClockNow,
+} from "@/lib/metrics";
+import type { DailyResult, FitResult, Settings } from "@/lib/sheet";
+import {
+  dailyCsvUrl,
+  fetchDaily,
+  fetchFit,
+  fetchRuns,
+  fetchSettings,
+  sheetCsvUrl,
+} from "@/lib/sheet";
+import type { Phase, WeeklyPlan, WorkoutKind } from "@/lib/plan";
+import { buildWeeklyPlan } from "@/lib/plan";
+import type { MarathonOutlook, VdotEstimate } from "@/lib/vdot";
+import {
+  MARATHON_LONG_RUN_KM,
+  MARATHON_WEEKLY_KM,
+  estimateVdot,
+  goalGap,
+  marathonOutlook,
+  raceEquivalents,
+  trainingPaces,
+} from "@/lib/vdot";
+
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+const PHASE_LABELS: Record<Phase, string> = {
+  maintain: "積み上げ（レース日は未定）",
+  base: "基礎づくり",
+  build: "強化",
+  peak: "仕上げ",
+  taper: "調整（テーパー）",
+};
+
+const KIND_LABELS: Record<WorkoutKind, string> = {
+  easy: "イージー",
+  long: "ロング",
+  threshold: "閾値（T）",
+  interval: "インターバル（I）",
+  marathon: "マラソンペース（M）",
+};
 
 export const revalidate = 600;
 
 /** コンディションのグラフに出す週数。52 週だと 1 本ずつが細くて折れ線が読めない */
 const CONDITION_WEEKS = 26;
 
+/** 強度の配分を集計する期間。短すぎると 1 本の練習で数字が跳ねる */
+const INTENSITY_DAYS = 84;
+
 export default async function Page() {
-  // fetchDaily は投げない契約なので、Running の失敗で早期 return しても未処理の拒否は出ない
+  // fetchDaily / fetchFit は投げない契約なので、Running の失敗で早期 return しても
+  // 未処理の拒否は出ない
   const dailyPromise = fetchDaily();
+  const fitPromise = fetchFit();
+  const settingsPromise = fetchSettings();
 
   let data: Awaited<ReturnType<typeof fetchRuns>>;
   try {
@@ -37,7 +91,8 @@ export default async function Page() {
   }
 
   const now = wallClockNow();
-  const o = buildOverview(data.runs, now);
+  const settings = (await settingsPromise).settings;
+  const o = buildOverview(data.runs, now, settings.weeklyTargetKm);
   const daily = await dailyPromise;
 
   if (!o.runs.length) {
@@ -51,6 +106,53 @@ export default async function Page() {
   const scatterRuns = o.runs.filter((r) => r.start >= scatterFrom);
   const monthPeak = Math.max(...o.months.map((m) => m.km), 1);
   const condition = daily.days.length ? buildCondition(daily.days, o.weeks, now) : null;
+
+  // 実力の推定は直近 180 日から。古い記録を混ぜると「今の実力」ではなくなる
+  const vdotFrom = addDays(startOfDay(now), -180);
+  const vdot = estimateVdot(o.runs, vdotFrom);
+  const longestRecentKm = Math.max(
+    0,
+    ...o.runs.filter((r) => r.start >= vdotFrom).map((r) => r.distance),
+  );
+  const outlook = vdot ? marathonOutlook(vdot.vdot, o.last28.km / 4, longestRecentKm) : null;
+
+  // レース日は未定でよいので、あるときだけ残り週数を出す
+  const weeksToRace = settings.raceDate
+    ? Math.floor((+settings.raceDate - +startOfDay(now)) / (86400000 * 7))
+    : null;
+
+  /**
+   * 疲労のサイン。安静時心拍が上がっている / HRV が下がっているとき。
+   *
+   * しきい値（1.5bpm / 3ms）は前週比の測定ノイズを越える程度という目安で、
+   * 根拠のある定数ではない。**質練習を減らす方向にしか使わない**ので、
+   * 外しても危険側には倒れない。
+   */
+  const deltaOf = (key: DailyMetricKey) =>
+    condition?.metrics.find((m) => m.key === key)?.delta ?? null;
+  const restingDelta = deltaOf("restingHr");
+  const hrvDelta = deltaOf("hrv");
+  const fatigued =
+    (restingDelta !== null && restingDelta > 1.5) || (hrvDelta !== null && hrvDelta < -3);
+
+  const plan =
+    vdot && outlook
+      ? buildWeeklyPlan({
+          paces: trainingPaces(vdot.vdot),
+          chronicKm: o.last28.km / 4,
+          longestRecentKm,
+          load: o.load,
+          trainingDays: settings.trainingDays,
+          targetKm: o.targetKm,
+          weeksToRace,
+          fatigued,
+        })
+      : null;
+
+  const fit = await fitPromise;
+  const intensityFrom = addDays(startOfDay(now), -INTENSITY_DAYS);
+  const intensity = intensitySplit(fit.runs.filter((r) => r.start >= intensityFrom));
+  const coverage = fitCoverage(o.runs, fit.runs, intensityFrom);
 
   return (
     <>
@@ -184,6 +286,22 @@ export default async function Page() {
         </div>
       </section>
 
+      <VdotSection
+        estimate={vdot}
+        outlook={outlook}
+        settings={settings}
+        weeksToRace={weeksToRace}
+      />
+
+      <PlanSection plan={plan} />
+
+      <IntensitySection
+        fit={fit}
+        split={intensity}
+        weeks={intensityWeeks(fit.runs, now, CONDITION_WEEKS)}
+        coverage={coverage}
+      />
+
       <ConditionSection daily={daily} condition={condition} />
 
       <section className="section">
@@ -294,6 +412,317 @@ export default async function Page() {
   );
 }
 
+function VdotSection({
+  estimate,
+  outlook,
+  settings,
+  weeksToRace,
+}: {
+  estimate: VdotEstimate | null;
+  outlook: MarathonOutlook | null;
+  settings: Settings;
+  weeksToRace: number | null;
+}) {
+  if (!estimate || !outlook) return null;
+
+  const gap = settings.goalMarathonSec ? goalGap(estimate.vdot, settings.goalMarathonSec) : null;
+  const p = trainingPaces(estimate.vdot);
+  const rows: { label: string; pace: string; note: string }[] = [
+    { label: "E — イージー", pace: `${pace(p.easyFast)}〜${pace(p.easySlow)}`, note: "土台。走行距離の大半をここに置く" },
+    { label: "M — マラソン", pace: pace(p.marathon), note: "本番のペース感覚" },
+    { label: "T — 閾値", pace: pace(p.threshold), note: "20分走やクルーズインターバル" },
+    { label: "I — インターバル", pace: pace(p.interval), note: "3〜5分 × 数本" },
+    { label: "R — レペティション", pace: pace(p.repetition), note: "短く速く。式の外挿なので目安" },
+  ];
+
+  return (
+    <section className="section">
+      <h2>今の実力</h2>
+      <p className="section-note">
+        いちばん速く走れた 1 本から VDOT を出し、そこから他の距離のタイムと練習ペースを導いたもの。
+      </p>
+
+      <div className="vdot">
+        <div>
+          <p className="eyebrow">VDOT</p>
+          <div className="load-value">{decimal(estimate.vdot, 1)}</div>
+          <p className="stat-sub">
+            {shortDate(estimate.run.start)}の{km(estimate.run.distance)}km（{clock(estimate.run.movingSec)}
+            ・{pace(estimate.run.pace)}/km）から
+          </p>
+        </div>
+
+        <div>
+          <p className="eyebrow">フルマラソンの予測</p>
+          <div className="vdot-range">
+            {clock(outlook.optimistic)}
+            <span> 〜 </span>
+            {clock(outlook.realistic)}
+          </div>
+          <p className="stat-sub">
+            {outlook.ready
+              ? `週${km(outlook.weeklyKm)}km・最長${km(outlook.longestKm)}km 走っている。VDOT どおりに走れる想定。`
+              : `週${km(outlook.weeklyKm)}km・最長${km(outlook.longestKm)}km。目安の週${MARATHON_WEEKLY_KM}km・${MARATHON_LONG_RUN_KM}km 走に届いていないので、速いほうの数字は出ない前提で見る。`}
+          </p>
+        </div>
+      </div>
+
+      {gap && (
+        <div className="goal">
+          <div>
+            <p className="eyebrow">目標</p>
+            <div className="goal-value">{clock(gap.goalSec)}</div>
+          </div>
+          <div>
+            <p className="eyebrow">目標までの差</p>
+            <p className="goal-note">
+              必要な VDOT は <strong>{decimal(gap.goalVdot, 1)}</strong>。
+              {gap.vdotGap > 0 ? (
+                <>
+                  {" "}
+                  今より <strong>{decimal(gap.vdotGap, 1)}</strong> 足りない（予測とは{" "}
+                  {clock(Math.abs(gap.secGap))} の差）。
+                </>
+              ) : (
+                <> 今の実力で届いている（予測より {clock(Math.abs(gap.secGap))} 速い目標）。</>
+              )}
+              {weeksToRace !== null &&
+                (weeksToRace >= 0
+                  ? ` レースまで${weeksToRace}週。`
+                  : " レース日は過ぎている。")}
+              {weeksToRace === null && " レース日は未定。"}
+            </p>
+            {settings.trainingDays.length > 0 && (
+              <p className="stat-sub">
+                走れる曜日: {settings.trainingDays.map((d) => WEEKDAY_LABELS[d]).join("・")}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>距離</th>
+              {raceEquivalents(estimate.vdot).map((r) => (
+                <th key={r.label} className="num">
+                  {r.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>等価タイム</td>
+              {raceEquivalents(estimate.vdot).map((r) => (
+                <td key={r.label} className="num mono">
+                  {clock(r.sec)}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>練習ペース</th>
+              <th className="num">分/km</th>
+              <th className="text">使いどころ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.label}>
+                <td>{r.label}</td>
+                <td className="num mono">{r.pace}</td>
+                <td className="text">{r.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="footnote">
+        根拠にしたのはレースではなく普段の練習なので、全力で走った 1 本が無ければ実力より低く出る。
+        つまりこの値は下限とみて、上振れより下振れを疑うほうが正しい。
+        短い距離からマラソンを外挿すると速すぎる予測が出るが、原因は心肺能力ではなく走り込み量。
+      </p>
+    </section>
+  );
+}
+
+function PlanSection({ plan }: { plan: WeeklyPlan | null }) {
+  if (!plan || !plan.workouts.length) return null;
+
+  return (
+    <section className="section">
+      <h2>今週のメニュー</h2>
+      <p className="section-note">
+        今の実力から出したペースを、走れる量に合わせて割ったもの。提案であって処方ではないので、
+        体調と予定に合わせて動かしてよい。
+      </p>
+
+      <div className="plan-head">
+        <div>
+          <p className="eyebrow">時期</p>
+          <div className="plan-phase">{PHASE_LABELS[plan.phase]}</div>
+          {plan.weeksToRace !== null && (
+            <p className="stat-sub">レースまで{plan.weeksToRace}週</p>
+          )}
+        </div>
+        <div>
+          <p className="eyebrow">週の合計</p>
+          <div className="plan-phase mono">{km(plan.totalKm)}km</div>
+          <p className="stat-sub">{plan.workouts.length}本</p>
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>曜日</th>
+              <th className="text">練習</th>
+              <th className="num">距離</th>
+              <th className="num">ペース</th>
+              <th className="text">やりかた</th>
+            </tr>
+          </thead>
+          <tbody>
+            {plan.workouts.map((w, i) => (
+              <tr key={i}>
+                <td>{w.day === null ? "—" : WEEKDAY_LABELS[w.day]}</td>
+                <td className="text">{KIND_LABELS[w.kind]}</td>
+                <td className="num mono">{km(w.km)}km</td>
+                <td className="num mono">
+                  {pace(w.paceSec)}
+                  {w.paceSecSlow ? `〜${pace(w.paceSecSlow)}` : ""}
+                </td>
+                <td className="text">{w.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {plan.notes.length > 0 && (
+        <ul className="plan-notes">
+          {plan.notes.map((n, i) => (
+            <li key={i}>{n}</li>
+          ))}
+        </ul>
+      )}
+
+      <p className="footnote">
+        質練習の量は週の走行距離に対する割合で決めている（閾値 10% / インターバル 8%）。
+        回数ではなく量で縛るのは、走れる日数が少なくても 8 割を楽に走る配分が崩れないため。
+        曜日が「—」の行は、走れる曜日を Settings タブに書くと埋まる。
+      </p>
+    </section>
+  );
+}
+
+/** 強度の 3 分割。低いほうから並べる */
+const INTENSITY_BANDS = [
+  { key: "easy", label: "easy", note: "80%未満", color: "var(--teal)" },
+  { key: "moderate", label: "moderate", note: "80–90%", color: "var(--amber)" },
+  { key: "hard", label: "hard", note: "90%以上", color: "var(--magenta)" },
+] as const;
+
+function IntensitySection({
+  fit,
+  split,
+  weeks,
+  coverage,
+}: {
+  fit: FitResult;
+  split: IntensitySplit;
+  weeks: ReturnType<typeof intensityWeeks>;
+  coverage: { withFit: number; total: number };
+}) {
+  if (!fit.configured) return null;
+
+  const pct = (sec: number) => (split.total > 0 ? (sec / split.total) * 100 : 0);
+
+  return (
+    <section className="section">
+      <h2>強度の配分</h2>
+      <p className="section-note">
+        心拍ゾーンの滞在時間を、最大心拍に対する割合で 3 つに分けたもの。楽な走りを 8 割、
+        強い走りを 2 割にすると伸びやすいとされる。直近{INTENSITY_DAYS}日。
+      </p>
+
+      {fit.error ? (
+        <div className="notice">
+          <p>Fit タブを読み込めませんでした（{fit.error}）。</p>
+        </div>
+      ) : split.total === 0 ? (
+        <div className="notice">
+          <p>
+            Fit タブは読めましたが、直近{INTENSITY_DAYS}日にゾーンの記録がありません。
+            <code>node scripts/import-fit.mjs &lt;dir&gt; --post</code> を実行したか確認してください。
+            手順は <code>docs/fit-import-setup.md</code> にあります。
+          </p>
+        </div>
+      ) : (
+        <>
+          <dl className="intensity-grid">
+            {INTENSITY_BANDS.map((b) => (
+              <div className="intensity-tile" key={b.key}>
+                <dt>
+                  <span className="chip" style={{ background: b.color }} /> {b.label}
+                  <small>{b.note}</small>
+                </dt>
+                <dd>
+                  {decimal(pct(split[b.key]), 0)}
+                  <small>%</small>
+                </dd>
+                <p className="stat-sub">{clock(split[b.key])}</p>
+              </div>
+            ))}
+          </dl>
+
+          <div className="intensity-track">
+            {INTENSITY_BANDS.map((b) => (
+              <div
+                key={b.key}
+                className="intensity-fill"
+                style={{ width: `${pct(split[b.key])}%`, background: b.color }}
+              />
+            ))}
+            <div className="intensity-mark" style={{ left: "80%" }} />
+          </div>
+          <div className="legend">
+            <span>縦線 = easy 80% の目安</span>
+          </div>
+
+          <div className="plot">
+            <IntensityStrip weeks={weeks} />
+          </div>
+          <div className="legend">
+            <span>棒の高さ = その週の合計時間、色が強度</span>
+            <span>直近{CONDITION_WEEKS}週</span>
+          </div>
+
+          <p className="footnote">
+            直近{INTENSITY_DAYS}日の{coverage.total}本のうち{coverage.withFit}本に FIT
+            の記録がある。
+            {coverage.withFit < coverage.total &&
+              "残りは取り込み前のランなので、この配分には入っていない。"}
+            ゾーンの境界は最大心拍の設定値から決まるが、これは年齢式による推定なので、
+            境界そのものにずれがありうる。
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function ConditionSection({
   daily,
   condition,
@@ -302,6 +731,7 @@ function ConditionSection({
   condition: Condition | null;
 }) {
   if (!daily.configured) return null;
+
 
   const missing = condition?.metrics.filter((m) => m.latest === null) ?? [];
   const rows = condition ? [...condition.days].reverse() : [];

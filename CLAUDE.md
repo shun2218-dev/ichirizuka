@@ -42,7 +42,7 @@ Google スプレッドシートを唯一のデータソースとする Next.js�
 
 ### コード
 
-- **依存を増やさない。** 標準機能で書けないか先に検討する
+- **アプリの依存を増やさない。** `dependencies` は `next` / `react` / `react-dom` のみ。`scripts/` のオフライン道具は例外（判断基準は @docs/coding-rules.md）
 - デフォルトはサーバーコンポーネント。`"use client"` は本当に必要なときだけ
 - `lib/` は React に依存しない純粋関数のみ
 - コメントは「なぜそうしているか」を書く。外部データの揺れへの対処には必ず理由を残す
@@ -66,11 +66,14 @@ npm run build
 ```
 app/page.tsx             画面の組み立て（サーバーコンポーネント）
 app/api/refresh/route.ts キャッシュ破棄
-lib/sheet.ts             CSV 取得とパース（表記ゆれの吸収）。Running / Daily の両タブ
-lib/metrics.ts           週/月の集計、ベスト、負荷、日次指標の計算
+lib/sheet.ts             CSV 取得とパース（表記ゆれの吸収）。Running / Daily / Fit / Settings タブ
+lib/metrics.ts           週/月の集計、ベスト、負荷、日次指標、強度の配分
+lib/vdot.ts              VDOT・予測タイム・練習ペース
+lib/plan.ts              週次メニューの生成
 lib/format.ts            ペース・時間・色の整形
 components/              SVG グラフ、ボタン
 app/globals.css          見た目のすべて
 apps-script/             Google Apps Script（アプリ本体とは独立）
+scripts/                 取り込み道具（オフラインで動く。アプリは読まない）
 docs/                    開発ドキュメント
 ```
