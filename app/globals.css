@@ -387,6 +387,47 @@ a {
   }
 }
 
+/* 目標（Settings タブがあるときだけ出る） */
+.goal {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 1px;
+  margin-top: 18px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+
+.goal > div {
+  background: var(--card);
+  padding: 14px 18px 16px;
+}
+
+.goal-value {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--ink);
+}
+
+.goal-note {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.goal-note strong {
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+@media (max-width: 780px) {
+  .goal {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── 強度の配分 ─────────────────────────────── */
 
 .intensity-grid {

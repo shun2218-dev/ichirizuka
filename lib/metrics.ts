@@ -118,7 +118,7 @@ export function personalBests(runs: Run[]) {
   });
 }
 
-export function buildOverview(allRuns: Run[], now: Date) {
+export function buildOverview(allRuns: Run[], now: Date, weeklyTargetKm?: number | null) {
   const runs = allRuns.filter((r) => r.distance >= NOISE_KM);
   const skipped = allRuns.length - runs.length;
 
@@ -146,7 +146,9 @@ export function buildOverview(allRuns: Run[], now: Date) {
   const last = runs[runs.length - 1] ?? null;
   const restDays = last ? Math.floor((+today - +startOfDay(last.start)) / 86400000) : null;
 
-  const targetKm = Number(process.env.WEEKLY_TARGET_KM ?? 30) || 30;
+  // シートの設定 → 環境変数 → 既定値。シートを優先するのは、再デプロイなしで
+  // 変えられるほうが実用に耐えるから
+  const targetKm = weeklyTargetKm ?? (Number(process.env.WEEKLY_TARGET_KM ?? 30) || 30);
 
   return {
     runs,

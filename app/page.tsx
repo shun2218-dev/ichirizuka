@@ -27,17 +27,27 @@ import {
   startOfDay,
   wallClockNow,
 } from "@/lib/metrics";
-import type { DailyResult, FitResult } from "@/lib/sheet";
-import { dailyCsvUrl, fetchDaily, fetchFit, fetchRuns, sheetCsvUrl } from "@/lib/sheet";
+import type { DailyResult, FitResult, Settings } from "@/lib/sheet";
+import {
+  dailyCsvUrl,
+  fetchDaily,
+  fetchFit,
+  fetchRuns,
+  fetchSettings,
+  sheetCsvUrl,
+} from "@/lib/sheet";
 import type { MarathonOutlook, VdotEstimate } from "@/lib/vdot";
 import {
   MARATHON_LONG_RUN_KM,
   MARATHON_WEEKLY_KM,
   estimateVdot,
+  goalGap,
   marathonOutlook,
   raceEquivalents,
   trainingPaces,
 } from "@/lib/vdot";
+
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
 export const revalidate = 600;
 
@@ -52,6 +62,7 @@ export default async function Page() {
   // 未処理の拒否は出ない
   const dailyPromise = fetchDaily();
   const fitPromise = fetchFit();
+  const settingsPromise = fetchSettings();
 
   let data: Awaited<ReturnType<typeof fetchRuns>>;
   try {
@@ -61,7 +72,8 @@ export default async function Page() {
   }
 
   const now = wallClockNow();
-  const o = buildOverview(data.runs, now);
+  const settings = (await settingsPromise).settings;
+  const o = buildOverview(data.runs, now, settings.weeklyTargetKm);
   const daily = await dailyPromise;
 
   if (!o.runs.length) {
@@ -222,7 +234,7 @@ export default async function Page() {
         </div>
       </section>
 
-      <VdotSection estimate={vdot} outlook={outlook} />
+      <VdotSection estimate={vdot} outlook={outlook} settings={settings} now={now} />
 
       <IntensitySection
         fit={fit}
@@ -344,11 +356,21 @@ export default async function Page() {
 function VdotSection({
   estimate,
   outlook,
+  settings,
+  now,
 }: {
   estimate: VdotEstimate | null;
   outlook: MarathonOutlook | null;
+  settings: Settings;
+  now: Date;
 }) {
   if (!estimate || !outlook) return null;
+
+  const gap = settings.goalMarathonSec ? goalGap(estimate.vdot, settings.goalMarathonSec) : null;
+  // レース日は未定でよいので、あるときだけ残り週数を出す
+  const weeksToRace = settings.raceDate
+    ? Math.floor((+settings.raceDate - +startOfDay(now)) / (86400000 * 7))
+    : null;
 
   const p = trainingPaces(estimate.vdot);
   const rows: { label: string; pace: string; note: string }[] = [
@@ -390,6 +412,40 @@ function VdotSection({
           </p>
         </div>
       </div>
+
+      {gap && (
+        <div className="goal">
+          <div>
+            <p className="eyebrow">目標</p>
+            <div className="goal-value">{clock(gap.goalSec)}</div>
+          </div>
+          <div>
+            <p className="eyebrow">目標までの差</p>
+            <p className="goal-note">
+              必要な VDOT は <strong>{decimal(gap.goalVdot, 1)}</strong>。
+              {gap.vdotGap > 0 ? (
+                <>
+                  {" "}
+                  今より <strong>{decimal(gap.vdotGap, 1)}</strong> 足りない（予測とは{" "}
+                  {clock(Math.abs(gap.secGap))} の差）。
+                </>
+              ) : (
+                <> 今の実力で届いている（予測より {clock(Math.abs(gap.secGap))} 速い目標）。</>
+              )}
+              {weeksToRace !== null &&
+                (weeksToRace >= 0
+                  ? ` レースまで${weeksToRace}週。`
+                  : " レース日は過ぎている。")}
+              {weeksToRace === null && " レース日は未定。"}
+            </p>
+            {settings.trainingDays.length > 0 && (
+              <p className="stat-sub">
+                走れる曜日: {settings.trainingDays.map((d) => WEEKDAY_LABELS[d]).join("・")}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="table-wrap">
         <table>

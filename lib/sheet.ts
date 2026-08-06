@@ -74,6 +74,33 @@ export type FitSummary = {
   avgCadence: number | null;
 };
 
+/**
+ * Settings タブ。目標や練習の条件を、再デプロイなしで変えられるようにするためのもの。
+ *
+ * UI から書き込む方式は採っていない（アプリは読み取り専用のまま保つ）。手でシートを
+ * 編集する運用にすることで、認証も書き込み権限も要らずに済む。
+ *
+ * 心拍ゾーンの境界と最大心拍はここに置かない。FIT がランごとの実際の設定値を
+ * 持ってくるので、二重に持つと食い違うだけになる。
+ */
+export type Settings = {
+  /** フルマラソンの目標タイム（秒） */
+  goalMarathonSec: number | null;
+  /** レース当日。未定なら null。**空を正常系として扱う** */
+  raceDate: Date | null;
+  /** 走れる曜日（0=日曜 … 6=土曜）。未設定なら空配列 */
+  trainingDays: number[];
+  /** 週の目標距離 km。未設定なら環境変数へフォールバックする */
+  weeklyTargetKm: number | null;
+};
+
+const EMPTY_SETTINGS: Settings = {
+  goalMarathonSec: null,
+  raceDate: null,
+  trainingDays: [],
+  weeklyTargetKm: null,
+};
+
 const SECONDS_IN_DAY = 86400;
 
 /** gviz なら「リンクを知っている全員が閲覧可」だけで読める（ウェブ公開は不要） */
@@ -119,6 +146,20 @@ export function fitCsvUrl(): string | null {
 
   const id = process.env.SHEET_ID;
   const gid = process.env.SHEET_FIT_GID;
+  if (!id || !gid) return null;
+  return gvizUrl(id, gid);
+}
+
+/**
+ * Settings タブの CSV URL。設定がなければ null。
+ * Daily / Fit と同じく、未設定を異常扱いしない。
+ */
+export function settingsCsvUrl(): string | null {
+  const direct = process.env.SHEET_SETTINGS_CSV_URL;
+  if (direct) return direct;
+
+  const id = process.env.SHEET_ID;
+  const gid = process.env.SHEET_SETTINGS_GID;
   if (!id || !gid) return null;
   return gvizUrl(id, gid);
 }
@@ -411,6 +452,67 @@ export function rowsToFit(rows: string[][]): FitSummary[] {
   return out;
 }
 
+/** 曜日の表記ゆれ。英語の略記・フル・日本語のどれでも受ける */
+const WEEKDAYS: Record<string, number> = {
+  sun: 0, sunday: 0, 日: 0, 日曜: 0, 日曜日: 0,
+  mon: 1, monday: 1, 月: 1, 月曜: 1, 月曜日: 1,
+  tue: 2, tues: 2, tuesday: 2, 火: 2, 火曜: 2, 火曜日: 2,
+  wed: 3, wednesday: 3, 水: 3, 水曜: 3, 水曜日: 3,
+  thu: 4, thur: 4, thurs: 4, thursday: 4, 木: 4, 木曜: 4, 木曜日: 4,
+  fri: 5, friday: 5, 金: 5, 金曜: 5, 金曜日: 5,
+  sat: 6, saturday: 6, 土: 6, 土曜: 6, 土曜日: 6,
+};
+
+/** "Tue,Thu,Sat" / "火・木・土" → [2, 4, 6]。読めない語は落とす */
+function parseWeekdays(raw: string): number[] {
+  const days = raw
+    .split(/[,、\/・\s]+/)
+    .map((s) => WEEKDAYS[s.trim().toLowerCase()])
+    .filter((n): n is number => n !== undefined);
+  return [...new Set(days)].sort((a, b) => a - b);
+}
+
+/**
+ * Settings タブは `key` / `value` の 2 列。**ヘッダー行は要らない**
+ * （既知のキーに一致した行だけ拾うので、あっても無視される）。
+ *
+ * 外部データなので値は信用しない。読めないものは既定値に落とし、例外は投げない。
+ */
+export function rowsToSettings(rows: string[][]): Settings {
+  const out: Settings = { ...EMPTY_SETTINGS, trainingDays: [] };
+
+  for (const row of rows) {
+    const key = (row[0] ?? "").replace(/[\s　_-]/g, "").toLowerCase();
+    const value = (row[1] ?? "").trim();
+    if (!key || !value) continue;
+
+    switch (key) {
+      case "goalmarathontime":
+      case "目標タイム": {
+        const sec = parseDuration(value);
+        if (sec > 0) out.goalMarathonSec = sec;
+        break;
+      }
+      case "racedate":
+      case "レース日":
+        out.raceDate = parseDay(value);
+        break;
+      case "trainingdays":
+      case "練習可能曜日":
+        out.trainingDays = parseWeekdays(value);
+        break;
+      case "weeklytargetkm":
+      case "週の目標距離": {
+        const km = parseOptionalNumber(value);
+        if (km !== null && km > 0) out.weeklyTargetKm = km;
+        break;
+      }
+    }
+  }
+
+  return out;
+}
+
 async function fetchCsv(url: string, tag: string): Promise<string[][]> {
   const res = await fetch(url, {
     // Vercel 側のキャッシュ。ページの revalidate と合わせている。
@@ -452,6 +554,34 @@ export async function fetchDaily(): Promise<DailyResult> {
     return {
       configured: true,
       days: [],
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+export type SettingsResult = {
+  /** Settings タブの設定があるか */
+  configured: boolean;
+  settings: Settings;
+  /** 読めなかった理由。ダッシュボードを止めないよう例外にはしない */
+  error: string | null;
+};
+
+/**
+ * Settings タブを読む。未設定・読み取り失敗・0 件のいずれでも既定値を返す。
+ * 目標が読めないだけで走った記録が見られなくなるのは本末転倒なので。
+ */
+export async function fetchSettings(): Promise<SettingsResult> {
+  const url = settingsCsvUrl();
+  if (!url) return { configured: false, settings: EMPTY_SETTINGS, error: null };
+
+  try {
+    const settings = rowsToSettings(await fetchCsv(url, "settings"));
+    return { configured: true, settings, error: null };
+  } catch (err) {
+    return {
+      configured: true,
+      settings: EMPTY_SETTINGS,
       error: err instanceof Error ? err.message : String(err),
     };
   }
