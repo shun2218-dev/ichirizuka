@@ -52,7 +52,8 @@ npm run dev                  # http://localhost:3000
 | `APP_TIMEZONE` | – | 既定 `Asia/Tokyo` |
 
 安静時心拍数・HRV・VO2max・体重・歩数は、iPhone のショートカットから同じシートの
-`Daily` タブに毎朝投げます。作り方は [docs/daily-metrics-setup.md](docs/daily-metrics-setup.md)。
+`Daily` タブに毎日未明、前日までの分を投げます。作り方は
+[docs/daily-metrics-setup.md](docs/daily-metrics-setup.md)。
 `SHEET_DAILY_GID` を入れなければコンディションのセクションは出ず、走りの記録だけが表示されます。
 
 ## 3. Vercel にデプロイ
