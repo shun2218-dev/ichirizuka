@@ -42,6 +42,38 @@ export type Daily = {
 /** Daily の指標名（date 以外）。表示側の一覧はここから導く */
 export type DailyMetricKey = Exclude<keyof Daily, "date">;
 
+/**
+ * Fit タブの 1 ラン分。scripts/import-fit.mjs が FIT から作って書き込む。
+ *
+ * Running タブにあるのはラン全体の平均心拍だけで、それでは強度の配分が測れない
+ * （同じ距離を淡々と走った日とインターバルを入れた日で平均が一致しうる）。
+ * ゾーンごとの滞在時間はここにしかない。
+ */
+export type FitSummary = {
+  /** 開始日時。Running タブの行と突き合わせるためのキー */
+  start: Date;
+  /** 秒 */
+  movingSec: number;
+  /** m */
+  distanceM: number;
+  avgHr: number | null;
+  maxHr: number | null;
+  /** ゾーンごとの滞在秒数。[0] は「ゾーン 1 の下限より下」 */
+  zoneSec: number[];
+  /** ゾーンの上限 bpm。設定を変えた前後を混ぜないようランごとに持つ */
+  zoneBounds: number[];
+  /** そのとき設定されていた最大心拍 */
+  maxHrSetting: number | null;
+  /** そのときの安静時心拍 */
+  restingHr: number | null;
+  laps: number;
+  /** "distance" なら距離オートラップ（単なる km 刻み）で、構造化練習ではない */
+  lapTrigger: string;
+  /** HealthFit の推定値。自己申告の体感強度とは別物 */
+  rpe: number | null;
+  avgCadence: number | null;
+};
+
 const SECONDS_IN_DAY = 86400;
 
 /** gviz なら「リンクを知っている全員が閲覧可」だけで読める（ウェブ公開は不要） */
@@ -73,6 +105,20 @@ export function dailyCsvUrl(): string | null {
 
   const id = process.env.SHEET_ID;
   const gid = process.env.SHEET_DAILY_GID;
+  if (!id || !gid) return null;
+  return gvizUrl(id, gid);
+}
+
+/**
+ * Fit タブの CSV URL。設定がなければ null。
+ * Daily と同じく、未設定を異常扱いしない（取り込みは任意）。
+ */
+export function fitCsvUrl(): string | null {
+  const direct = process.env.SHEET_FIT_CSV_URL;
+  if (direct) return direct;
+
+  const id = process.env.SHEET_ID;
+  const gid = process.env.SHEET_FIT_GID;
   if (!id || !gid) return null;
   return gvizUrl(id, gid);
 }
@@ -305,6 +351,66 @@ export function rowsToDaily(rows: string[][]): Daily[] {
   return days;
 }
 
+export function rowsToFit(rows: string[][]): FitSummary[] {
+  const headerIndex = rows.findIndex((r) => indexOfHeader(r, "start", "開始日時") >= 0);
+  if (headerIndex < 0) return [];
+  const header = rows[headerIndex];
+
+  const col = {
+    start: indexOfHeader(header, "start", "開始日時"),
+    movingSec: indexOfHeader(header, "moving sec"),
+    distanceM: indexOfHeader(header, "distance m"),
+    avgHr: indexOfHeader(header, "avg hr"),
+    maxHr: indexOfHeader(header, "max hr"),
+    zone: [0, 1, 2, 3, 4, 5].map((i) => indexOfHeader(header, `zone ${i} sec`)),
+    zoneBounds: indexOfHeader(header, "zone bounds"),
+    maxHrSetting: indexOfHeader(header, "max hr setting"),
+    restingHr: indexOfHeader(header, "resting hr"),
+    laps: indexOfHeader(header, "laps"),
+    lapTrigger: indexOfHeader(header, "lap trigger"),
+    rpe: indexOfHeader(header, "rpe"),
+    avgCadence: indexOfHeader(header, "avg cadence"),
+  };
+
+  const at = (row: string[], i: number) => (i >= 0 ? (row[i] ?? "") : "");
+
+  const out: FitSummary[] = [];
+  for (const row of rows.slice(headerIndex + 1)) {
+    // "2026/07/19 13:10:12" を日付と時刻に割る。parseStart は秒を見ないが、
+    // Running タブ側が分までなので、突き合わせる粒度としてはこれで揃う。
+    const raw = at(row, col.start).trim();
+    const sep = raw.indexOf(" ");
+    const start = parseStart(sep < 0 ? raw : raw.slice(0, sep), sep < 0 ? "" : raw.slice(sep + 1));
+    if (!start) continue;
+
+    const zoneSec = col.zone.map((i) => parseNumber(at(row, i)));
+    // ゾーンが 1 つも入っていない行は、この取り込みの目的を果たしていないので持たない
+    if (zoneSec.every((v) => v === 0)) continue;
+
+    out.push({
+      start,
+      movingSec: parseNumber(at(row, col.movingSec)),
+      distanceM: parseNumber(at(row, col.distanceM)),
+      avgHr: parseOptionalNumber(at(row, col.avgHr)),
+      maxHr: parseOptionalNumber(at(row, col.maxHr)),
+      zoneSec,
+      zoneBounds: at(row, col.zoneBounds)
+        .split("/")
+        .map((s) => parseNumber(s))
+        .filter((n) => n > 0),
+      maxHrSetting: parseOptionalNumber(at(row, col.maxHrSetting)),
+      restingHr: parseOptionalNumber(at(row, col.restingHr)),
+      laps: parseNumber(at(row, col.laps)),
+      lapTrigger: at(row, col.lapTrigger).trim(),
+      rpe: parseOptionalNumber(at(row, col.rpe)),
+      avgCadence: parseOptionalNumber(at(row, col.avgCadence)),
+    });
+  }
+
+  out.sort((a, b) => a.start.getTime() - b.start.getTime());
+  return out;
+}
+
 async function fetchCsv(url: string, tag: string): Promise<string[][]> {
   const res = await fetch(url, {
     // Vercel 側のキャッシュ。ページの revalidate と合わせている。
@@ -346,6 +452,33 @@ export async function fetchDaily(): Promise<DailyResult> {
     return {
       configured: true,
       days: [],
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+export type FitResult = {
+  /** Fit タブの設定があるか */
+  configured: boolean;
+  runs: FitSummary[];
+  /** 読めなかった理由。ランニングの表示を止めないよう例外にはしない */
+  error: string | null;
+};
+
+/**
+ * Fit タブを読む。Daily と同じく、設定漏れや読み取り失敗で
+ * ダッシュボードを落とさない。
+ */
+export async function fetchFit(): Promise<FitResult> {
+  const url = fitCsvUrl();
+  if (!url) return { configured: false, runs: [], error: null };
+
+  try {
+    return { configured: true, runs: rowsToFit(await fetchCsv(url, "fit")), error: null };
+  } catch (err) {
+    return {
+      configured: true,
+      runs: [],
       error: err instanceof Error ? err.message : String(err),
     };
   }

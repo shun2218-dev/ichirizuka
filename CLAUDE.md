@@ -66,11 +66,12 @@ npm run build
 ```
 app/page.tsx             画面の組み立て（サーバーコンポーネント）
 app/api/refresh/route.ts キャッシュ破棄
-lib/sheet.ts             CSV 取得とパース（表記ゆれの吸収）。Running / Daily の両タブ
+lib/sheet.ts             CSV 取得とパース（表記ゆれの吸収）。Running / Daily / Fit タブ
 lib/metrics.ts           週/月の集計、ベスト、負荷、日次指標の計算
 lib/format.ts            ペース・時間・色の整形
 components/              SVG グラフ、ボタン
 app/globals.css          見た目のすべて
 apps-script/             Google Apps Script（アプリ本体とは独立）
+scripts/                 取り込み道具（オフラインで動く。アプリは読まない）
 docs/                    開発ドキュメント
 ```

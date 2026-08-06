@@ -6,5 +6,6 @@ export async function POST() {
   // "max" は expire が最長なので、実質「古さに関係なく全部パージ」になる。
   revalidateTag("runs", "max");
   revalidateTag("daily", "max");
+  revalidateTag("fit", "max");
   return NextResponse.json({ ok: true, at: new Date().toISOString() });
 }
