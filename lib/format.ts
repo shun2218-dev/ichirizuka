@@ -1,3 +1,5 @@
+import type { Phase, WorkoutKind } from "./plan";
+
 /** 秒/km → "5'19"" */
 export function pace(secPerKm: number): string {
   if (!secPerKm || !Number.isFinite(secPerKm)) return "—";
@@ -34,6 +36,28 @@ export function km(v: number, digits = 1): string {
 }
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+/** 0=日 … 6=土。曜日が決まっていなければ「—」 */
+export function weekday(day: number | null): string {
+  return day === null ? "—" : WEEKDAYS[day];
+}
+
+/** メニューの表示名。画面とメール（/api/plan）で同じ語を使う */
+export const PHASE_LABELS: Record<Phase, string> = {
+  maintain: "積み上げ（レース日は未定）",
+  base: "基礎づくり",
+  build: "強化",
+  peak: "仕上げ",
+  taper: "調整（テーパー）",
+};
+
+export const KIND_LABELS: Record<WorkoutKind, string> = {
+  easy: "イージー",
+  long: "ロング",
+  threshold: "閾値（T）",
+  interval: "インターバル（I）",
+  marathon: "マラソンペース（M）",
+};
 
 export function shortDate(d: Date): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
