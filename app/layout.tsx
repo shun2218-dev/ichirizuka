@@ -11,7 +11,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#e8eced",
+  // --sg-color-bg-page（= --paper）の写し。lib/format.ts の effortColor と同じ理由で
+  // 二重管理になっている。ブラウザ UI の色は CSS 変数を読まない
+  themeColor: "#f3f6f5",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
