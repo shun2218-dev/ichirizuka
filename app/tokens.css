@@ -1,0 +1,350 @@
+/* sashigane — 生成物。手で編集しない。
+   規則と根拠は docs/decisions.md を参照。
+   --sg-{category}-{数字} はプリミティブで、コンポーネントからの参照は禁止（原則3）。 */
+:root {
+  /* spacing — 決定1-2 */
+  --sg-space-0: 0;
+  --sg-space-1: 0.25rem;
+  --sg-space-2: 0.5rem;
+  --sg-space-3: 0.75rem;
+  --sg-space-4: 1rem;
+  --sg-space-5: 1.5rem;
+  --sg-space-6: 2rem;
+  --sg-space-7: 3rem;
+  --sg-space-8: 4rem;
+  --sg-space-9: 6rem;
+
+  /* font-size — 決定1-3 */
+  --sg-font-size-0: 0.702332rem;
+  --sg-font-size-1: 0.790123rem;
+  --sg-font-size-2: 0.888889rem;
+  --sg-font-size-3: 1rem;
+  --sg-font-size-4: 1.25rem;
+  --sg-font-size-5: 1.5625rem;
+  --sg-font-size-6: 1.953125rem;
+  --sg-font-size-7: 2.441406rem;
+  --sg-font-size-8: 3.051758rem;
+  --sg-font-size-9: 3.814697rem;
+  --sg-font-size-10: 4.768372rem;
+
+  /* line-height — サイズから導出される従属値（決定1-4）。単体では使わない */
+  --sg-line-height-display-0: 1.5119;
+  --sg-line-height-display-1: 1.4328;
+  --sg-line-height-display-2: 1.3625;
+  --sg-line-height-display-3: 1.3;
+  --sg-line-height-display-4: 1.2;
+  --sg-line-height-display-5: 1.12;
+  --sg-line-height-display-6: 1.056;
+  --sg-line-height-display-7: 1.0048;
+  --sg-line-height-display-8: 0.9638;
+  --sg-line-height-display-9: 0.9311;
+  --sg-line-height-display-10: 0.9049;
+  --sg-line-height-ui-0: 1.7119;
+  --sg-line-height-ui-1: 1.6328;
+  --sg-line-height-ui-2: 1.5625;
+  --sg-line-height-ui-3: 1.5;
+  --sg-line-height-ui-4: 1.4;
+  --sg-line-height-ui-5: 1.32;
+  --sg-line-height-ui-6: 1.256;
+  --sg-line-height-ui-7: 1.2048;
+  --sg-line-height-ui-8: 1.1638;
+  --sg-line-height-ui-9: 1.1311;
+  --sg-line-height-ui-10: 1.1049;
+  --sg-line-height-prose-0: 1.9119;
+  --sg-line-height-prose-1: 1.8328;
+  --sg-line-height-prose-2: 1.7625;
+  --sg-line-height-prose-3: 1.7;
+  --sg-line-height-prose-4: 1.6;
+  --sg-line-height-prose-5: 1.52;
+  --sg-line-height-prose-6: 1.456;
+  --sg-line-height-prose-7: 1.4048;
+  --sg-line-height-prose-8: 1.3638;
+  --sg-line-height-prose-9: 1.3311;
+  --sg-line-height-prose-10: 1.3049;
+
+  /* radius — spacing の部分集合（決定1-5）。full は段ではない */
+  --sg-radius-0: 0;
+  --sg-radius-1: 0.25rem;
+  --sg-radius-2: 0.5rem;
+  --sg-radius-3: 0.75rem;
+  --sg-radius-4: 1rem;
+  --sg-radius-full: 9999px;
+
+  /* duration — 遷移とループは知覚上の制約が違う別スケール（決定1-6） */
+  --sg-duration-0: 100ms;
+  --sg-duration-1: 141.4ms;
+  --sg-duration-2: 200ms;
+  --sg-duration-3: 282.8ms;
+  --sg-duration-4: 400ms;
+  --sg-duration-loop-0: 707.1ms;
+  --sg-duration-loop-1: 1000ms;
+  --sg-duration-loop-2: 1414.2ms;
+
+  /* border-width — px 固定。決定1-1 の例外（決定1-7） */
+  --sg-border-width-0: 1px;
+  --sg-border-width-1: 2px;
+  --sg-border-width-2: 3px;
+
+  /* elevation の高さ。影の仕様は色システムと組で決まる（決定1-8、未実装） */
+  --sg-elevation-0: 0;
+  --sg-elevation-1: 1;
+  --sg-elevation-2: 2;
+  --sg-elevation-3: 3;
+
+  /* 色 — primary から生成（決定5-1）。段は保証境界に解かれている（決定5-2） */
+  --sg-neutral-50: oklch(0.9700 0.0028 192.77);
+  --sg-neutral-100: oklch(0.8826 0.0114 192.77);
+  --sg-neutral-200: oklch(0.7951 0.0206 192.77);
+  --sg-neutral-300: oklch(0.7077 0.0243 192.77);
+  --sg-neutral-400: oklch(0.6203 0.0213 192.77);
+  --sg-neutral-500: oklch(0.5328 0.0183 192.77);
+  --sg-neutral-600: oklch(0.4655 0.0160 192.77);
+  --sg-neutral-700: oklch(0.3981 0.0137 192.77);
+  --sg-neutral-800: oklch(0.3307 0.0114 192.77);
+  --sg-neutral-900: oklch(0.2633 0.0091 192.77);
+  --sg-neutral-950: oklch(0.1959 0.0068 192.77);
+  --sg-primary-50: oklch(0.9700 0.0431 192.77);
+  --sg-primary-100: oklch(0.8826 0.1513 192.77);
+  --sg-primary-200: oklch(0.7951 0.1363 192.77);
+  --sg-primary-300: oklch(0.7077 0.1213 192.77);
+  --sg-primary-400: oklch(0.6203 0.1063 192.77);
+  --sg-primary-500: oklch(0.5328 0.0914 192.77);
+  --sg-primary-600: oklch(0.4655 0.0798 192.77);
+  --sg-primary-700: oklch(0.3981 0.0683 192.77);
+  --sg-primary-800: oklch(0.3307 0.0568 192.77);
+  --sg-primary-900: oklch(0.2633 0.0454 192.77);
+  --sg-primary-950: oklch(0.1959 0.0340 192.77);
+  --sg-danger-50: oklch(0.9700 0.0149 33.00);
+  --sg-danger-100: oklch(0.8826 0.0629 33.00);
+  --sg-danger-200: oklch(0.7951 0.1191 33.00);
+  --sg-danger-300: oklch(0.7077 0.1861 33.00);
+  --sg-danger-400: oklch(0.6203 0.2290 33.00);
+  --sg-danger-500: oklch(0.5328 0.1968 33.00);
+  --sg-danger-600: oklch(0.4655 0.1720 33.00);
+  --sg-danger-700: oklch(0.3981 0.1472 33.00);
+  --sg-danger-800: oklch(0.3307 0.1225 33.00);
+  --sg-danger-900: oklch(0.2633 0.0979 33.00);
+  --sg-danger-950: oklch(0.1959 0.0737 33.00);
+  --sg-warning-50: oklch(0.9700 0.0258 78.00);
+  --sg-warning-100: oklch(0.8826 0.1060 78.00);
+  --sg-warning-200: oklch(0.7951 0.1658 78.00);
+  --sg-warning-300: oklch(0.7077 0.1476 78.00);
+  --sg-warning-400: oklch(0.6203 0.1294 78.00);
+  --sg-warning-500: oklch(0.5328 0.1112 78.00);
+  --sg-warning-600: oklch(0.4655 0.0972 78.00);
+  --sg-warning-700: oklch(0.3981 0.0832 78.00);
+  --sg-warning-800: oklch(0.3307 0.0692 78.00);
+  --sg-warning-900: oklch(0.2633 0.0553 78.00);
+  --sg-warning-950: oklch(0.1959 0.0416 78.00);
+  --sg-success-50: oklch(0.9700 0.0451 158.00);
+  --sg-success-100: oklch(0.8826 0.2024 158.00);
+  --sg-success-200: oklch(0.7951 0.1860 158.00);
+  --sg-success-300: oklch(0.7077 0.1656 158.00);
+  --sg-success-400: oklch(0.6203 0.1452 158.00);
+  --sg-success-500: oklch(0.5328 0.1247 158.00);
+  --sg-success-600: oklch(0.4655 0.1090 158.00);
+  --sg-success-700: oklch(0.3981 0.0933 158.00);
+  --sg-success-800: oklch(0.3307 0.0776 158.00);
+  --sg-success-900: oklch(0.2633 0.0619 158.00);
+  --sg-success-950: oklch(0.1959 0.0465 158.00);
+  --sg-info-50: oklch(0.9700 0.0156 242.00);
+  --sg-info-100: oklch(0.8826 0.0631 242.00);
+  --sg-info-200: oklch(0.7951 0.1137 242.00);
+  --sg-info-300: oklch(0.7077 0.1677 242.00);
+  --sg-info-400: oklch(0.6203 0.1473 242.00);
+  --sg-info-500: oklch(0.5328 0.1265 242.00);
+  --sg-info-600: oklch(0.4655 0.1106 242.00);
+  --sg-info-700: oklch(0.3981 0.0946 242.00);
+  --sg-info-800: oklch(0.3307 0.0787 242.00);
+  --sg-info-900: oklch(0.2633 0.0629 242.00);
+  --sg-info-950: oklch(0.1959 0.0472 242.00);
+  --sg-series-1-50: oklch(0.9700 0.0141 192.77);
+  --sg-series-1-100: oklch(0.8826 0.0570 192.77);
+  --sg-series-1-200: oklch(0.7951 0.1028 192.77);
+  --sg-series-1-300: oklch(0.7077 0.1213 192.77);
+  --sg-series-1-400: oklch(0.6203 0.1063 192.77);
+  --sg-series-1-500: oklch(0.5328 0.0914 192.77);
+  --sg-series-1-600: oklch(0.4655 0.0798 192.77);
+  --sg-series-1-700: oklch(0.3981 0.0683 192.77);
+  --sg-series-1-800: oklch(0.3307 0.0568 192.77);
+  --sg-series-1-900: oklch(0.2633 0.0454 192.77);
+  --sg-series-1-950: oklch(0.1959 0.0340 192.77);
+  --sg-series-2-50: oklch(0.9700 0.0141 264.77);
+  --sg-series-2-100: oklch(0.8826 0.0570 264.77);
+  --sg-series-2-200: oklch(0.7951 0.1028 264.77);
+  --sg-series-2-300: oklch(0.7077 0.1213 264.77);
+  --sg-series-2-400: oklch(0.6203 0.1063 264.77);
+  --sg-series-2-500: oklch(0.5328 0.0914 264.77);
+  --sg-series-2-600: oklch(0.4655 0.0798 264.77);
+  --sg-series-2-700: oklch(0.3981 0.0683 264.77);
+  --sg-series-2-800: oklch(0.3307 0.0568 264.77);
+  --sg-series-2-900: oklch(0.2633 0.0454 264.77);
+  --sg-series-2-950: oklch(0.1959 0.0340 264.77);
+  --sg-series-3-50: oklch(0.9700 0.0141 336.77);
+  --sg-series-3-100: oklch(0.8826 0.0570 336.77);
+  --sg-series-3-200: oklch(0.7951 0.1028 336.77);
+  --sg-series-3-300: oklch(0.7077 0.1213 336.77);
+  --sg-series-3-400: oklch(0.6203 0.1063 336.77);
+  --sg-series-3-500: oklch(0.5328 0.0914 336.77);
+  --sg-series-3-600: oklch(0.4655 0.0798 336.77);
+  --sg-series-3-700: oklch(0.3981 0.0683 336.77);
+  --sg-series-3-800: oklch(0.3307 0.0568 336.77);
+  --sg-series-3-900: oklch(0.2633 0.0454 336.77);
+  --sg-series-3-950: oklch(0.1959 0.0340 336.77);
+  --sg-series-4-50: oklch(0.9700 0.0141 51.00);
+  --sg-series-4-100: oklch(0.8826 0.0570 51.00);
+  --sg-series-4-200: oklch(0.7951 0.1028 51.00);
+  --sg-series-4-300: oklch(0.7077 0.1213 51.00);
+  --sg-series-4-400: oklch(0.6203 0.1063 51.00);
+  --sg-series-4-500: oklch(0.5328 0.0914 51.00);
+  --sg-series-4-600: oklch(0.4655 0.0798 51.00);
+  --sg-series-4-700: oklch(0.3981 0.0683 51.00);
+  --sg-series-4-800: oklch(0.3307 0.0568 51.00);
+  --sg-series-4-900: oklch(0.2633 0.0454 51.00);
+  --sg-series-4-950: oklch(0.1959 0.0340 51.00);
+  --sg-series-5-50: oklch(0.9700 0.0141 120.77);
+  --sg-series-5-100: oklch(0.8826 0.0570 120.77);
+  --sg-series-5-200: oklch(0.7951 0.1028 120.77);
+  --sg-series-5-300: oklch(0.7077 0.1213 120.77);
+  --sg-series-5-400: oklch(0.6203 0.1063 120.77);
+  --sg-series-5-500: oklch(0.5328 0.0914 120.77);
+  --sg-series-5-600: oklch(0.4655 0.0798 120.77);
+  --sg-series-5-700: oklch(0.3981 0.0683 120.77);
+  --sg-series-5-800: oklch(0.3307 0.0568 120.77);
+  --sg-series-5-900: oklch(0.2633 0.0454 120.77);
+  --sg-series-5-950: oklch(0.1959 0.0340 120.77);
+
+  /* ここからセマンティック（参照可） */
+  /* タイポグラフィ — サイズと行高は必ず対（決定1-4） */
+  --sg-text-caption: var(--sg-font-size-1);
+  --sg-text-caption-leading: var(--sg-line-height-ui-1);
+  --sg-text-label: var(--sg-font-size-2);
+  --sg-text-label-leading: var(--sg-line-height-ui-2);
+  --sg-text-body: var(--sg-font-size-3);
+  --sg-text-body-leading: var(--sg-line-height-ui-3);
+  --sg-text-body-prose: var(--sg-font-size-3);
+  --sg-text-body-prose-leading: var(--sg-line-height-prose-3);
+  --sg-text-heading-3: var(--sg-font-size-4);
+  --sg-text-heading-3-leading: var(--sg-line-height-ui-4);
+  --sg-text-heading-2: var(--sg-font-size-5);
+  --sg-text-heading-2-leading: var(--sg-line-height-ui-5);
+  --sg-text-heading-1: var(--sg-font-size-6);
+  --sg-text-heading-1-leading: var(--sg-line-height-ui-6);
+  --sg-text-display: var(--sg-font-size-8);
+  --sg-text-display-leading: var(--sg-line-height-display-8);
+
+  --sg-color-bg-page: var(--sg-neutral-50);
+  --sg-color-bg-surface: var(--sg-neutral-100);
+  --sg-color-bg-inset: var(--sg-neutral-200);
+  --sg-color-text-default: var(--sg-neutral-900);
+  --sg-color-text-muted: var(--sg-neutral-600);
+  --sg-color-text-faint: var(--sg-neutral-500);
+  --sg-color-border-subtle: var(--sg-neutral-200);
+  --sg-color-border-default: var(--sg-neutral-300);
+  --sg-color-accent: var(--sg-primary-500);
+  --sg-color-accent-mark: var(--sg-primary-400);
+  --sg-color-border-focus: var(--sg-primary-400);
+  --sg-color-danger: var(--sg-danger-500);
+  --sg-color-danger-mark: var(--sg-danger-400);
+  --sg-color-warning: var(--sg-warning-500);
+  --sg-color-warning-mark: var(--sg-warning-400);
+  --sg-color-success: var(--sg-success-500);
+  --sg-color-success-mark: var(--sg-success-400);
+  --sg-color-info: var(--sg-info-500);
+  --sg-color-info-mark: var(--sg-info-400);
+  --sg-color-chart-1: var(--sg-series-1-600);
+  --sg-color-chart-2: var(--sg-series-2-800);
+  --sg-color-chart-3: var(--sg-series-3-400);
+  --sg-color-chart-4: var(--sg-series-4-700);
+  --sg-color-chart-5: var(--sg-series-5-500);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sg-color-bg-page: var(--sg-neutral-950);
+    --sg-color-bg-surface: var(--sg-neutral-900);
+    --sg-color-bg-inset: var(--sg-neutral-800);
+    --sg-color-text-default: var(--sg-neutral-100);
+    --sg-color-text-muted: var(--sg-neutral-300);
+    --sg-color-text-faint: var(--sg-neutral-400);
+    --sg-color-border-subtle: var(--sg-neutral-800);
+    --sg-color-border-default: var(--sg-neutral-700);
+    --sg-color-accent: var(--sg-primary-400);
+    --sg-color-accent-mark: var(--sg-primary-300);
+    --sg-color-border-focus: var(--sg-primary-300);
+    --sg-color-danger: var(--sg-danger-400);
+    --sg-color-danger-mark: var(--sg-danger-300);
+    --sg-color-warning: var(--sg-warning-400);
+    --sg-color-warning-mark: var(--sg-warning-300);
+    --sg-color-success: var(--sg-success-400);
+    --sg-color-success-mark: var(--sg-success-300);
+    --sg-color-info: var(--sg-info-400);
+    --sg-color-info-mark: var(--sg-info-300);
+    --sg-color-chart-1: var(--sg-series-1-100);
+    --sg-color-chart-2: var(--sg-series-2-300);
+    --sg-color-chart-3: var(--sg-series-3-500);
+    --sg-color-chart-4: var(--sg-series-4-200);
+    --sg-color-chart-5: var(--sg-series-5-400);
+    color-scheme: dark;
+  }
+}
+
+/* 明示的な指定は OS の設定より優先する。
+   両方向を出すのは、明色専用・暗色専用のアプリが固定できるようにするため（決定5-10）。
+   :root と同じ詳細度なので、順序でメディアクエリに勝つ。 */
+[data-theme="light"] {
+  --sg-color-bg-page: var(--sg-neutral-50);
+  --sg-color-bg-surface: var(--sg-neutral-100);
+  --sg-color-bg-inset: var(--sg-neutral-200);
+  --sg-color-text-default: var(--sg-neutral-900);
+  --sg-color-text-muted: var(--sg-neutral-600);
+  --sg-color-text-faint: var(--sg-neutral-500);
+  --sg-color-border-subtle: var(--sg-neutral-200);
+  --sg-color-border-default: var(--sg-neutral-300);
+  --sg-color-accent: var(--sg-primary-500);
+  --sg-color-accent-mark: var(--sg-primary-400);
+  --sg-color-border-focus: var(--sg-primary-400);
+  --sg-color-danger: var(--sg-danger-500);
+  --sg-color-danger-mark: var(--sg-danger-400);
+  --sg-color-warning: var(--sg-warning-500);
+  --sg-color-warning-mark: var(--sg-warning-400);
+  --sg-color-success: var(--sg-success-500);
+  --sg-color-success-mark: var(--sg-success-400);
+  --sg-color-info: var(--sg-info-500);
+  --sg-color-info-mark: var(--sg-info-400);
+  --sg-color-chart-1: var(--sg-series-1-600);
+  --sg-color-chart-2: var(--sg-series-2-800);
+  --sg-color-chart-3: var(--sg-series-3-400);
+  --sg-color-chart-4: var(--sg-series-4-700);
+  --sg-color-chart-5: var(--sg-series-5-500);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --sg-color-bg-page: var(--sg-neutral-950);
+  --sg-color-bg-surface: var(--sg-neutral-900);
+  --sg-color-bg-inset: var(--sg-neutral-800);
+  --sg-color-text-default: var(--sg-neutral-100);
+  --sg-color-text-muted: var(--sg-neutral-300);
+  --sg-color-text-faint: var(--sg-neutral-400);
+  --sg-color-border-subtle: var(--sg-neutral-800);
+  --sg-color-border-default: var(--sg-neutral-700);
+  --sg-color-accent: var(--sg-primary-400);
+  --sg-color-accent-mark: var(--sg-primary-300);
+  --sg-color-border-focus: var(--sg-primary-300);
+  --sg-color-danger: var(--sg-danger-400);
+  --sg-color-danger-mark: var(--sg-danger-300);
+  --sg-color-warning: var(--sg-warning-400);
+  --sg-color-warning-mark: var(--sg-warning-300);
+  --sg-color-success: var(--sg-success-400);
+  --sg-color-success-mark: var(--sg-success-300);
+  --sg-color-info: var(--sg-info-400);
+  --sg-color-info-mark: var(--sg-info-300);
+  --sg-color-chart-1: var(--sg-series-1-100);
+  --sg-color-chart-2: var(--sg-series-2-300);
+  --sg-color-chart-3: var(--sg-series-3-500);
+  --sg-color-chart-4: var(--sg-series-4-200);
+  --sg-color-chart-5: var(--sg-series-5-400);
+  color-scheme: dark;
+}

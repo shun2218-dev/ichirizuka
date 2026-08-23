@@ -1,15 +1,45 @@
-:root {
-  --paper: #e8eced;
-  --card: #f6f8f8;
-  --grid: #d6dee0;
-  --rule: #c2ced2;
-  --ink: #14202b;
-  --muted: #64757f;
-  --faint: #94a4ac;
-  --teal: #1f7a78;
-  --amber: #e0a73b;
-  --magenta: #c9436b;
+/*
+  色は sashigane のトークンから引く（app/tokens.css）。
+  tokens.css は sashigane の生成物をそのままコミットしたもので、手で編集しない。
+  primary = #1f7a78（従来の --teal）を入力に生成している。
 
+  **このリポジトリの変数名は変えない。** セレクタ側の var() 参照112箇所をそのまま動かすため、
+  ここは「ichirizuka の役割名 → sashigane のセマンティック」の対応表として働く。
+
+  値そのものは規則から機械的に導出されるので、従来の配色と完全には一致しない。
+  差分は PR に記録してある。
+*/
+:root {
+  /* 面と線 */
+  --paper: var(--sg-color-bg-page);
+  --card: var(--sg-color-bg-surface);
+  --grid: var(--sg-color-border-subtle);
+  --rule: var(--sg-color-border-default);
+
+  /* 文字 */
+  --ink: var(--sg-color-text-default);
+  --muted: var(--sg-color-text-muted);
+  --faint: var(--sg-color-text-faint);
+
+  /*
+    アクセント。従来 --teal 1色が6つの役割を兼ねていた
+    （リンク / フォーカスリング / 進捗バーの塗り / 増加方向 / スケール下端 / easy の識別色）。
+    sashigane は「文字に使うか、塗りに使うか」で段を変えるため、ここで2つに割れる。
+  */
+  --teal: var(--sg-color-accent);
+  --teal-fill: var(--sg-color-accent-mark);
+  --focus: var(--sg-color-border-focus);
+  --amber: var(--sg-color-warning-mark);
+  --magenta: var(--sg-color-danger);
+  --magenta-fill: var(--sg-color-danger-mark);
+
+  /*
+    ここから下は sashigane に対応物が無い。現在値のまま残す。
+    アプリ側で辻褄を合わせず、トークン層に足りないものとして記録する（sashigane#25）。
+
+    フォント  — sashigane は font-size と line-height しか持たず、font-family のトークンが無い
+    --gap     — 28px。密度の軸そのものが無い（spacing スケールは …24, 32… で 28 を持たない）
+  */
   --display: "Barlow Condensed", "Helvetica Neue", Arial, sans-serif;
   --body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
   --mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -42,7 +72,7 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -199,7 +229,7 @@ a {
 
 .target-fill {
   height: 100%;
-  background: var(--teal);
+  background: var(--teal-fill);
 }
 
 .target-legend {
@@ -292,7 +322,7 @@ a {
   display: inline-block;
   width: 78px;
   height: 8px;
-  background: linear-gradient(to right, var(--teal), var(--amber), var(--magenta));
+  background: linear-gradient(to right, var(--teal-fill), var(--amber), var(--magenta-fill));
 }
 
 /* ── 負荷 ───────────────────────────────────── */
@@ -697,7 +727,7 @@ td.mono {
 .bar-cell span {
   display: block;
   height: 7px;
-  background: var(--teal);
+  background: var(--teal-fill);
   opacity: 0.75;
 }
 

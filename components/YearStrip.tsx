@@ -56,7 +56,7 @@ export default function YearStrip({
         x2={width - 4}
         y1={baseline - scale(targetKm)}
         y2={baseline - scale(targetKm)}
-        stroke="var(--teal)"
+        stroke="var(--teal-fill)"
         strokeWidth="1"
         strokeDasharray="2 3"
       />

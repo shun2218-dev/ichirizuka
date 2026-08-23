@@ -152,7 +152,7 @@ export default function ConditionChart({ weeks }: { weeks: ConditionWeek[] }) {
                 y={barBase - h}
                 width={barW}
                 height={h}
-                fill="var(--teal)"
+                fill="var(--teal-fill)"
                 fillOpacity={0.6}
               >
                 <title>{caption(w)}</title>
