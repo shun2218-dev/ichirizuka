@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import "./tokens.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,12 +11,19 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#e8eced",
+  // --sg-color-bg-page（= --paper）の写し。lib/format.ts の effortColor と同じ理由で
+  // 二重管理になっている。ブラウザ UI の色は CSS 変数を読まない
+  themeColor: "#f3f6f5",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ja">
+    /*
+      明色に固定する。このアプリは紙を模した明色専用のデザインで、暗色の設計を持たない。
+      これが無いと、OS が暗色設定の環境で tokens.css の
+      prefers-color-scheme が効き、写像した変数だけが暗色へ飛んで生値と混ざる。
+    */
+    <html lang="ja" data-theme="light">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />

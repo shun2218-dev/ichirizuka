@@ -63,12 +63,23 @@ export function effort(hr: number | null): number {
   return Math.min(1, Math.max(0, (hr - lo) / (hi - lo)));
 }
 
-/** effort 0..1 → 帯の色。teal → amber → magenta */
+/**
+ * effort 0..1 → 帯の色。teal → amber → magenta
+ *
+ * **ここだけ sashigane のトークンを二重管理している。**
+ * 値は app/tokens.css の --sg-color-accent-mark / --sg-color-warning-mark /
+ * --sg-color-danger-mark の写しで、`.legend-ramp` のグラデーションと同じ3色である。
+ *
+ * トークンは CSS 変数としてしか出ておらず（型定義に値は無い）、
+ * このリポジトリは dependencies を増やせないので、JS から読む手段が現時点で無い。
+ * **凡例と実データの色を一致させるには、写すしかない。**
+ * sashigane 側が値を JS へ出せるようになったら、ここは消える。
+ */
 export function effortColor(t: number): string {
   const stops: [number, [number, number, number]][] = [
-    [0, [31, 122, 120]],
-    [0.5, [224, 167, 59]],
-    [1, [201, 67, 107]],
+    [0, [0, 154, 152]],
+    [0.5, [176, 123, 0]],
+    [1, [241, 50, 0]],
   ];
   for (let i = 0; i < stops.length - 1; i++) {
     const [p0, c0] = stops[i];
@@ -79,5 +90,5 @@ export function effortColor(t: number): string {
       return `rgb(${ch[0]} ${ch[1]} ${ch[2]})`;
     }
   }
-  return `rgb(201 67 107)`;
+  return `rgb(241 50 0)`;
 }

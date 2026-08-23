@@ -629,9 +629,9 @@ function PlanSection({ plan }: { plan: WeeklyPlan | null }) {
 
 /** 強度の 3 分割。低いほうから並べる */
 const INTENSITY_BANDS = [
-  { key: "easy", label: "easy", note: "80%未満", color: "var(--teal)" },
+  { key: "easy", label: "easy", note: "80%未満", color: "var(--teal-fill)" },
   { key: "moderate", label: "moderate", note: "80–90%", color: "var(--amber)" },
-  { key: "hard", label: "hard", note: "90%以上", color: "var(--magenta)" },
+  { key: "hard", label: "hard", note: "90%以上", color: "var(--magenta-fill)" },
 ] as const;
 
 function IntensitySection({
