@@ -10,9 +10,9 @@ const AXIS_H = 26;
 
 /** 低い強度から順に積む。色は既存の心拍スケールの両端と中間をそのまま使う */
 const BANDS = [
-  { key: "easy", label: "easy", color: "var(--teal)" },
+  { key: "easy", label: "easy", color: "var(--teal-fill)" },
   { key: "moderate", label: "moderate", color: "var(--amber)" },
-  { key: "hard", label: "hard", color: "var(--magenta)" },
+  { key: "hard", label: "hard", color: "var(--magenta-fill)" },
 ] as const;
 
 export default function IntensityStrip({ weeks }: { weeks: IntensityWeek[] }) {

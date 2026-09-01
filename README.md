@@ -70,11 +70,18 @@ Vercel の Project → Settings → Environment Variables に上の変数を入�
 ページは10分キャッシュします。走った直後に見たいときは右上の「シートを読み直す」を押すと、
 `/api/refresh` がキャッシュを捨てて読み直します（シート側の反映ラグはそのままです）。
 
+## 5. 今週のメニューを毎週受け取る（任意）
+
+「今週のメニュー」は月曜 00:00 時点の記録で確定し、週の途中では変わりません。開かなくても
+手元に届くようにしたい場合は、Apps Script から毎週 `/api/plan` を取りに来てメールで送れます。
+手順は [docs/weekly-plan-delivery.md](docs/weekly-plan-delivery.md) を参照してください。
+
 ## 構成
 
 ```
 app/page.tsx            画面の組み立て（サーバーコンポーネント）
 app/api/refresh/route.ts キャッシュ破棄
+app/api/plan/route.ts   今週のメニューを JSON で返す
 lib/sheet.ts            CSV 取得とパース（時間の表記ゆれを吸収）
 lib/metrics.ts          週/月の集計、ベスト、負荷、日次指標の計算
 lib/format.ts           ペース・時間・色の整形
@@ -94,6 +101,7 @@ app/globals.css         見た目のすべて
 | [docs/design.md](docs/design.md) | カラー、タイポグラフィ、レイアウト、グラフ |
 | [docs/roadmap.md](docs/roadmap.md) | 開発計画と検討中の項目 |
 | [docs/daily-metrics-setup.md](docs/daily-metrics-setup.md) | 日次のヘルスケア数値をシートに足す手順 |
+| [docs/weekly-plan-delivery.md](docs/weekly-plan-delivery.md) | 週次メニューを毎週メールで受け取る手順 |
 
 AI 支援ツール向けのエントリポイントは [CLAUDE.md](CLAUDE.md) です。
 

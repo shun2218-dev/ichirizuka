@@ -58,6 +58,7 @@ fetch(url, { next: { revalidate: 600, tags: ["runs"] } });
 | `lib/metrics.ts` | 集計・統計。日付境界の計算もここ |
 | `lib/vdot.ts` | VDOT と予測タイム・練習ペース。シートにも React にも依存しない |
 | `lib/plan.ts` | 週次メニューの生成。`lib/vdot.ts` のペースだけを入力に取る |
+| `lib/weekPlan.ts` | メニューの入力を週の頭（月曜 00:00）で切る。週内で内容を動かさないための層 |
 | `lib/format.ts` | 表示用の整形（ペース、時間、色）。ロジックを持たない |
 | `apps-script/` | Google Apps Script（アプリ本体とは独立） |
 

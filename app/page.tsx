@@ -4,6 +4,8 @@ import PaceScatter from "@/components/PaceScatter";
 import RefreshButton from "@/components/RefreshButton";
 import YearStrip from "@/components/YearStrip";
 import {
+  KIND_LABELS,
+  PHASE_LABELS,
   clock,
   dateWithWeekday,
   decimal,
@@ -15,9 +17,9 @@ import {
   shortDate,
   signed,
   timeOfDay,
+  weekday,
 } from "@/lib/format";
 import type { Condition, DailyMetricSummary, IntensitySplit } from "@/lib/metrics";
-import type { DailyMetricKey } from "@/lib/sheet";
 import {
   addDays,
   buildCondition,
@@ -37,8 +39,8 @@ import {
   fetchSettings,
   sheetCsvUrl,
 } from "@/lib/sheet";
-import type { Phase, WeeklyPlan, WorkoutKind } from "@/lib/plan";
-import { buildWeeklyPlan } from "@/lib/plan";
+import type { WeekPlan } from "@/lib/weekPlan";
+import { planForWeek } from "@/lib/weekPlan";
 import type { MarathonOutlook, VdotEstimate } from "@/lib/vdot";
 import {
   MARATHON_LONG_RUN_KM,
@@ -49,24 +51,6 @@ import {
   raceEquivalents,
   trainingPaces,
 } from "@/lib/vdot";
-
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
-
-const PHASE_LABELS: Record<Phase, string> = {
-  maintain: "積み上げ（レース日は未定）",
-  base: "基礎づくり",
-  build: "強化",
-  peak: "仕上げ",
-  taper: "調整（テーパー）",
-};
-
-const KIND_LABELS: Record<WorkoutKind, string> = {
-  easy: "イージー",
-  long: "ロング",
-  threshold: "閾値（T）",
-  interval: "インターバル（I）",
-  marathon: "マラソンペース（M）",
-};
 
 export const revalidate = 600;
 
@@ -121,33 +105,14 @@ export default async function Page() {
     ? Math.floor((+settings.raceDate - +startOfDay(now)) / (86400000 * 7))
     : null;
 
-  /**
-   * 疲労のサイン。安静時心拍が上がっている / HRV が下がっているとき。
-   *
-   * しきい値（1.5bpm / 3ms）は前週比の測定ノイズを越える程度という目安で、
-   * 根拠のある定数ではない。**質練習を減らす方向にしか使わない**ので、
-   * 外しても危険側には倒れない。
-   */
-  const deltaOf = (key: DailyMetricKey) =>
-    condition?.metrics.find((m) => m.key === key)?.delta ?? null;
-  const restingDelta = deltaOf("restingHr");
-  const hrvDelta = deltaOf("hrv");
-  const fatigued =
-    (restingDelta !== null && restingDelta > 1.5) || (hrvDelta !== null && hrvDelta < -3);
-
-  const plan =
-    vdot && outlook
-      ? buildWeeklyPlan({
-          paces: trainingPaces(vdot.vdot),
-          chronicKm: o.last28.km / 4,
-          longestRecentKm,
-          load: o.load,
-          trainingDays: settings.trainingDays,
-          targetKm: o.targetKm,
-          weeksToRace,
-          fatigued,
-        })
-      : null;
+  // メニューは週の頭で確定させる（入力を月曜 00:00 で切る）。詳細は lib/weekPlan.ts
+  const weekPlan = planForWeek({
+    runs: o.runs,
+    days: daily.days,
+    settings,
+    targetKm: o.targetKm,
+    now,
+  });
 
   const fit = await fitPromise;
   const intensityFrom = addDays(startOfDay(now), -INTENSITY_DAYS);
@@ -293,7 +258,7 @@ export default async function Page() {
         weeksToRace={weeksToRace}
       />
 
-      <PlanSection plan={plan} />
+      <PlanSection weekPlan={weekPlan} />
 
       <IntensitySection
         fit={fit}
@@ -494,7 +459,7 @@ function VdotSection({
             </p>
             {settings.trainingDays.length > 0 && (
               <p className="stat-sub">
-                走れる曜日: {settings.trainingDays.map((d) => WEEKDAY_LABELS[d]).join("・")}
+                走れる曜日: {settings.trainingDays.map((d) => weekday(d)).join("・")}
               </p>
             )}
           </div>
@@ -556,8 +521,9 @@ function VdotSection({
   );
 }
 
-function PlanSection({ plan }: { plan: WeeklyPlan | null }) {
-  if (!plan || !plan.workouts.length) return null;
+function PlanSection({ weekPlan }: { weekPlan: WeekPlan | null }) {
+  if (!weekPlan || !weekPlan.plan.workouts.length) return null;
+  const { plan, weekStart, nextAt } = weekPlan;
 
   return (
     <section className="section">
@@ -596,7 +562,7 @@ function PlanSection({ plan }: { plan: WeeklyPlan | null }) {
           <tbody>
             {plan.workouts.map((w, i) => (
               <tr key={i}>
-                <td>{w.day === null ? "—" : WEEKDAY_LABELS[w.day]}</td>
+                <td>{weekday(w.day)}</td>
                 <td className="text">{KIND_LABELS[w.kind]}</td>
                 <td className="num mono">{km(w.km)}km</td>
                 <td className="num mono">
@@ -619,6 +585,8 @@ function PlanSection({ plan }: { plan: WeeklyPlan | null }) {
       )}
 
       <p className="footnote">
+        この内容は {shortDate(weekStart)}（月）時点の記録で確定したもので、週の途中では変わらない。
+        次に組み直すのは {shortDate(nextAt)}（月）。
         質練習の量は週の走行距離に対する割合で決めている（閾値 10% / インターバル 8%）。
         回数ではなく量で縛るのは、走れる日数が少なくても 8 割を楽に走る配分が崩れないため。
         曜日が「—」の行は、走れる曜日を Settings タブに書くと埋まる。
@@ -629,9 +597,9 @@ function PlanSection({ plan }: { plan: WeeklyPlan | null }) {
 
 /** 強度の 3 分割。低いほうから並べる */
 const INTENSITY_BANDS = [
-  { key: "easy", label: "easy", note: "80%未満", color: "var(--teal)" },
+  { key: "easy", label: "easy", note: "80%未満", color: "var(--teal-fill)" },
   { key: "moderate", label: "moderate", note: "80–90%", color: "var(--amber)" },
-  { key: "hard", label: "hard", note: "90%以上", color: "var(--magenta)" },
+  { key: "hard", label: "hard", note: "90%以上", color: "var(--magenta-fill)" },
 ] as const;
 
 function IntensitySection({

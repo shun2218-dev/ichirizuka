@@ -118,6 +118,16 @@ export function personalBests(runs: Run[]) {
   });
 }
 
+/**
+ * 週の目標距離。シートの設定 → 環境変数 → 既定値の順。
+ *
+ * シートを優先するのは、再デプロイなしで変えられるほうが実用に耐えるから。
+ * メニュー生成も同じ値を使うので、解決の順番はここ 1 か所に置く。
+ */
+export function resolveTargetKm(weeklyTargetKm?: number | null): number {
+  return weeklyTargetKm ?? (Number(process.env.WEEKLY_TARGET_KM ?? 30) || 30);
+}
+
 export function buildOverview(allRuns: Run[], now: Date, weeklyTargetKm?: number | null) {
   const runs = allRuns.filter((r) => r.distance >= NOISE_KM);
   const skipped = allRuns.length - runs.length;
@@ -146,9 +156,7 @@ export function buildOverview(allRuns: Run[], now: Date, weeklyTargetKm?: number
   const last = runs[runs.length - 1] ?? null;
   const restDays = last ? Math.floor((+today - +startOfDay(last.start)) / 86400000) : null;
 
-  // シートの設定 → 環境変数 → 既定値。シートを優先するのは、再デプロイなしで
-  // 変えられるほうが実用に耐えるから
-  const targetKm = weeklyTargetKm ?? (Number(process.env.WEEKLY_TARGET_KM ?? 30) || 30);
+  const targetKm = resolveTargetKm(weeklyTargetKm);
 
   return {
     runs,
