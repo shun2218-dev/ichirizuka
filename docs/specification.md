@@ -427,6 +427,8 @@ Running のシートが読めない場合、集計を行わず設定手順の案
 | `POST /api/refresh` | キャッシュのタグを破棄する |
 | `GET /api/plan` | 今週のメニューを JSON と本文テキストで返す |
 
+どちらも Basic 認証を有効にしていれば認証が要る（下記「認証」）。
+
 `GET /api/plan` は画面と同じ `planForWeek` の結果を返す。**週の途中に叩いても同じものが
 返る**（入力を月曜 00:00 で切っているため）。
 
@@ -448,6 +450,25 @@ Running のシートが読めない場合、集計を行わず設定手順の案
 仕事にしない。** 週 1 回取りに来て自分に送る側は Apps Script に置く
 （[weekly-plan-delivery.md](weekly-plan-delivery.md)）。
 
+## 認証
+
+`BASIC_AUTH_USER` と `BASIC_AUTH_PASSWORD` が**両方そろったとき**だけ Basic 認証が
+有効になる。片方でも欠けていれば素通しする — 環境変数を入れる前にデプロイが落ちるのを
+避けるため。**設定するまでは誰でも見える**ということでもある。
+
+判定は [proxy.ts](../proxy.ts)（Next 16 で `middleware.ts` から名前が変わったもの）。
+画面と API の両方が対象で、`_next/static` などの静的アセットは対象外にしている
+（ページと API を塞げば中身は出ないので、実行回数が増えるだけになる）。
+
+- 認証情報が無い / 合わない場合は 401 と `WWW-Authenticate: Basic realm="ichirizuka", charset="UTF-8"`
+- `charset` を明示するのは、非 ASCII のパスワードをブラウザが latin-1 で送ってこないようにするため
+- ユーザー名とパスワードは SHA-256 に通してから `timingSafeEqual` で比べる。
+  どこまで一致したかを応答時間から読み取られないようにするため
+
+**Vercel の Deployment Protection は使わない。** `/api/plan` を取りに来る Apps Script まで
+401 で弾いてしまうため。Basic 認証なら取りに来る側にユーザー名とパスワードを持たせて通せる
+（[weekly-plan-delivery.md](weekly-plan-delivery.md)）。
+
 ## 環境変数
 
 | 変数 | 必須 | 既定 | 説明 |
@@ -463,6 +484,8 @@ Running のシートが読めない場合、集計を行わず設定手順の案
 | `SHEET_SETTINGS_CSV_URL` | – | — | Settings タブの CSV URL を直接指定する |
 | `WEEKLY_TARGET_KM` | – | `30` | 週の目標距離。Settings タブがあればそちらが優先 |
 | `APP_TIMEZONE` | – | `Asia/Tokyo` | 日付境界の判定に使う |
+| `BASIC_AUTH_USER` | – | — | Basic 認証のユーザー名。パスワードと**両方**そろったときだけ有効 |
+| `BASIC_AUTH_PASSWORD` | – | — | Basic 認証のパスワード |
 
 `SHEET_ID` は閲覧可能なシートを指すため、実質的にアクセス権に相当する。`.env.example` には書かない。
 

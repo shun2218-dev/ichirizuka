@@ -50,6 +50,8 @@ npm run dev                  # http://localhost:3000
 | `SHEET_DAILY_CSV_URL` | – | Daily タブの CSV URL を直接指定する |
 | `WEEKLY_TARGET_KM` | – | 週の目標距離。既定 30 |
 | `APP_TIMEZONE` | – | 既定 `Asia/Tokyo` |
+| `BASIC_AUTH_USER` | – | Basic 認証のユーザー名。パスワードと両方入れたときだけ有効 |
+| `BASIC_AUTH_PASSWORD` | – | Basic 認証のパスワード |
 
 安静時心拍数・HRV・VO2max・体重・歩数は、iPhone のショートカットから同じシートの
 `Daily` タブに毎日未明、前日までの分を投げます。作り方は
@@ -62,8 +64,14 @@ GitHub に push して Vercel で Import します。
 Vercel の Project → Settings → Environment Variables に上の変数を入れるだけです。
 ビルド設定は初期値のまま（Framework: Next.js）。
 
-自分だけが見たい場合は、Vercel の **Deployment Protection → Vercel Authentication** を
-有効にすると、自分の Vercel アカウントでログインしないと開けなくなります。
+自分だけが見たい場合は、`BASIC_AUTH_USER` と `BASIC_AUTH_PASSWORD` を入れると
+Basic 認証が掛かります。**両方そろったときだけ有効**で、片方でも欠けていると素通しします
+（環境変数を入れる前でもデプロイが落ちないように）。
+
+Vercel の **Deployment Protection → Vercel Authentication** でも同じことができますが、
+そちらは `/api/plan` を取りに来る Apps Script も 401 で弾きます。Basic 認証なら
+取りに来る側にユーザー名とパスワードを持たせて通せます
+（[docs/weekly-plan-delivery.md](docs/weekly-plan-delivery.md)）。
 
 ## 4. 更新のしかた
 
@@ -82,6 +90,7 @@ Vercel の Project → Settings → Environment Variables に上の変数を入�
 app/page.tsx            画面の組み立て（サーバーコンポーネント）
 app/api/refresh/route.ts キャッシュ破棄
 app/api/plan/route.ts   今週のメニューを JSON で返す
+proxy.ts                Basic 認証（環境変数が両方そろったときだけ）
 lib/sheet.ts            CSV 取得とパース（時間の表記ゆれを吸収）
 lib/metrics.ts          週/月の集計、ベスト、負荷、日次指標の計算
 lib/format.ts           ペース・時間・色の整形

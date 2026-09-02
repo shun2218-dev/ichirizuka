@@ -39,8 +39,12 @@ Apps Script（毎週月曜 6時）─→ GET /api/plan ─→ メール
 実力を推定できるラン（直近 180 日に 3km 以上）が無いときは `plan` が `null` になり、
 `text` にその理由が入る。シートが読めないときだけ HTTP 503 を返す。
 
-> **注意:** Vercel の Deployment Protection を有効にしていると、Apps Script からは 401 で
-> 弾かれる。Protection Bypass のトークンを使うか、保護を外すこと。
+> **注意:** アプリに Basic 認証（`BASIC_AUTH_USER` / `BASIC_AUTH_PASSWORD`）を掛けている
+> 場合、ブラウザで開くとユーザー名とパスワードを聞かれる。Apps Script 側にも同じものを
+> 入れる（次の節）。
+>
+> Vercel の Deployment Protection のほうは、トークンを持たない Apps Script を 401 で
+> 弾く。**閲覧を絞りたいだけなら Basic 認証を使うこと。**
 
 ## 2. Apps Script に置く
 
@@ -60,6 +64,11 @@ Apps Script（毎週月曜 6時）─→ GET /api/plan ─→ メール
 | `PLAN_URL` | `https://<デプロイ先>/api/plan` | ○ |
 | `PLAN_MAIL_TO` | 送り先のアドレス。省略すると実行者自身 | |
 | `APP_URL` | メール末尾に付けるダッシュボードの URL | |
+| `PLAN_BASIC_USER` | `BASIC_AUTH_USER` と同じ値 | Basic 認証を掛けているときだけ |
+| `PLAN_BASIC_PASSWORD` | `BASIC_AUTH_PASSWORD` と同じ値 | 同上 |
+
+`PLAN_BASIC_*` は**両方そろったときだけ** `Authorization` ヘッダーを付ける。片方だけ
+入っている状態は設定の途中とみなして付けない（送っても 401 になるだけなので）。
 
 ## 4. トリガーを作る
 
@@ -89,5 +98,6 @@ UrlFetchApp.fetch(WEBHOOK_URL, {
 `sendWeeklyPlan` は取得に失敗したら例外を投げる。Apps Script が実行失敗をメールで
 知らせるので、**黙って止まることはない**。よくある原因は次の 2 つ。
 
-- `PLAN_URL` の打ち間違い、または Deployment Protection による 401
+- `PLAN_URL` の打ち間違い、または 401（Basic 認証を掛けたのに `PLAN_BASIC_USER` /
+  `PLAN_BASIC_PASSWORD` を入れていない、値が食い違っている、あるいは Deployment Protection）
 - シートが読めていない（503 が返る。ダッシュボードも同時に落ちているはず）
