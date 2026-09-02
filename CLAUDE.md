@@ -64,6 +64,7 @@ npm run build
 ## ディレクトリ
 
 ```
+proxy.ts                 Basic 認証（環境変数が両方そろったときだけ有効）
 app/page.tsx             画面の組み立て（サーバーコンポーネント）
 app/api/refresh/route.ts キャッシュ破棄
 app/api/plan/route.ts    今週のメニューを外に返す（Apps Script が週 1 回取りに来る）
