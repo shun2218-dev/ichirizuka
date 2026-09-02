@@ -11,6 +11,8 @@
  *             PLAN_URL     https://<デプロイ先>/api/plan  （必須）
  *             PLAN_MAIL_TO 送り先。省略するとスクリプトの実行者宛て
  *             APP_URL      メールの末尾に付けるダッシュボードの URL（任意）
+ *             PLAN_BASIC_USER / PLAN_BASIC_PASSWORD
+ *                          アプリに Basic 認証を掛けている場合だけ（任意）
  *           タイムゾーンを Asia/Tokyo にしておくこと（月曜の判定がずれる）。
  * トリガー: createWeeklyPlanTrigger() をエディタから 1 回実行する。
  *
@@ -27,7 +29,11 @@ function sendWeeklyPlan() {
     throw new Error("スクリプトプロパティ PLAN_URL が未設定です");
   }
 
-  const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+  const res = UrlFetchApp.fetch(url, {
+    muteHttpExceptions: true,
+    followRedirects: true,
+    headers: basicAuthHeaders(props),
+  });
   const code = res.getResponseCode();
   const text = res.getContentText();
 
@@ -49,6 +55,22 @@ function sendWeeklyPlan() {
     subject: "今週のメニュー（" + body.weekLabel + "）",
     body: body.text + (appUrl ? "\n\n" + appUrl : ""),
   });
+}
+
+/**
+ * アプリに Basic 認証が掛かっているときの Authorization ヘッダー。
+ *
+ * 掛けていなければ何も付けない（空のまま渡してよい）。片方だけ入っている状態は
+ * 設定の途中とみなして付けない — 中途半端なヘッダーを送っても 401 になるだけ。
+ */
+function basicAuthHeaders(props) {
+  const user = props.getProperty("PLAN_BASIC_USER");
+  const password = props.getProperty("PLAN_BASIC_PASSWORD");
+  if (!user || !password) return {};
+
+  // UTF_8 を明示する。既定の charset だと非 ASCII のパスワードが化ける
+  const token = Utilities.base64Encode(user + ":" + password, Utilities.Charset.UTF_8);
+  return { Authorization: "Basic " + token };
 }
 
 /**
