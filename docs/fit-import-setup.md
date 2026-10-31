@@ -96,12 +96,50 @@ SHEET_FIT_GID=123456789
 **未設定でもダッシュボードは落ちない。** Daily タブと同じ扱いで、設定するまで
 その情報を使わないだけ。
 
-## 定期実行について
+## 6. 毎日自動で取り込む
 
-日々のランを反映するには、走るたびにこのスクリプトを実行する必要がある。
+走るたびに手で実行していると止まる。実際に 2026/08/05 で止まり、画面が
+「直近 84 日にゾーンの記録がありません」になった。`scripts/fit-schedule.sh` で
+launchd に登録すると、毎日 22:00 にこの取り込みが走る。
 
-**止まっても気づきにくい**ので、最終取り込み日を画面に出すこと（[#24](https://github.com/shun2218-dev/ichirizuka/issues/24)）。
-自動化する場合も、失敗が黙って積み上がらない形にする。
+```bash
+scripts/fit-schedule.sh install
+```
+
+FIT のフォルダが既定（`~/Google Drive/My Drive/HealthFit`）でない場合は引数で渡す。
+
+```bash
+scripts/fit-schedule.sh install ~/"Dropbox/HealthFit"
+```
+
+| コマンド | 何をするか |
+| --- | --- |
+| `install [dir]` | `~/Library/LaunchAgents` に plist を生成して登録する |
+| `uninstall` | 登録を外して plist を消す |
+| `run` | launchd が呼ぶ入口。手で叩いて動作を見てもよい |
+
+ログは `~/Library/Logs/ichirizuka/import-fit.log`。登録したあと動作を見るには
+`launchctl kickstart -p gui/$UID/dev.shun2218.ichirizuka-fit`。
+
+### なぜこの Mac 上で回すのか
+
+FIT は HealthFit が Google Drive に書き出したものを読むしかなく、**CI や Vercel から
+は触れない。** Drive API を足せば取りに行けるが、認証の設定を増やさないというのが
+この取り込み全体の方針なので採らない。同期済みのフォルダが見えるのはこの Mac だけ
+なので、定期実行もここに置く。
+
+Mac が寝ていた・落ちていた時間帯は実行されないが、**取り込みは開始日時をキーにした
+上書きなので、遅れて走っても行は増えない。** 走らなかった日の分は次の実行がまとめて
+拾うため、失敗を即座にリトライする必要もない。
+
+### 止まったときに気づくために
+
+`fit-schedule.sh` は失敗すると macOS の通知を出してから終了する。**ログだけだと見に
+行かないため。** フォルダが見つからない（Drive の同期が外れた）場合も同じ扱いにして
+いて、0 本を淡々と送って成功扱いにはしない。
+
+通知を見落とすと止まったまま進むので、**最終取り込み日を画面に出すのが本来の解**
+（[#24](https://github.com/shun2218-dev/ichirizuka/issues/24)）。現状は未実装。
 
 ## 取れるもの
 
